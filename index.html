@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#14161a">
+<title>口袋控衛 Pocket PG</title>
+<link rel="stylesheet" href="style.css?v=3">
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<!-- 比賽中 HUD -->
+<div id="hud" class="hidden">
+  <div id="hud-top"><span id="hud-rep"></span><span id="hud-play">高位擋拆</span><span id="hud-score"></span></div>
+  <div id="hud-hint">滑向隊友 = 傳球　｜　點一下 = 自己出手</div>
+  <div id="timer"><div id="timer-fill"></div></div>
+  <div id="fp-rotate" class="hidden">橫向拿手機，才看得到弱側底角</div>
+</div>
+
+<!-- 首頁 -->
+<section id="home" class="screen">
+  <div class="card">
+    <h1>口袋控衛</h1>
+    <p class="sub">Pocket PG · 擋拆閱讀訓練（原型）</p>
+    <div class="row">
+      <label>難度</label>
+      <div class="seg" id="diff">
+        <button data-v="easy">新手</button>
+        <button data-v="normal">標準</button>
+        <button data-v="hard">進階</button>
+      </div>
+    </div>
+    <div class="row">
+      <label>視角</label>
+      <div class="seg" id="viewmode">
+        <button data-v="fp">第一人稱</button>
+        <button data-v="tps">越肩</button>
+      </div>
+    </div>
+    <div class="row">
+      <label for="gyro">轉頭模式</label>
+      <input type="checkbox" id="gyro">
+      <span class="note" id="gyro-note">拿手機轉動，畫面跟著轉</span>
+    </div>
+    <div class="row">
+      <label for="occl">遮蔽模式</label>
+      <input type="checkbox" id="occl">
+      <span class="note">防守者動作後畫面會隱藏防守者</span>
+    </div>
+    <div class="row"><label>反應基準</label><span id="base-label">尚未校準</span></div>
+    <button class="primary" id="btn-start">開始訓練（10 題）</button>
+    <button id="btn-calib">反應時間校準</button>
+    <button id="btn-help">怎麼玩</button>
+    <p class="note">建議橫向拿手機，視野更接近場上。</p>
+  </div>
+</section>
+
+<!-- 說明 -->
+<section id="help" class="screen hidden">
+  <div class="card">
+    <h2>怎麼玩</h2>
+    <ol>
+      <li>你是控衛（藍色、持球）。新手從切入分球開始，之後是高位擋拆。</li>
+      <li>紅色是防守者。看他們怎麼應對：協防有沒有離開射手、擋拆時大個子沉退、延誤、包夾還是換防，以及弱側底角的防守者是真內縮還是假撲。</li>
+      <li>難度決定題目等級：新手（第 1–2 級）、標準（1–3 級）、進階（2–4 級）。</li>
+      <li>轉頭模式：第一人稱下轉動手機，視線跟著轉，弱側要自己轉過去看。</li>
+      <li>在時間條跑完前做決定：<b>往隊友的方向滑</b>就是傳球給他，<b>點一下</b>就是自己出手（急停跳投或上籃）。</li>
+      <li>太早做決定（防守還沒動）算「猜的」；太慢算「猶豫」。</li>
+      <li>每題結束會告訴你該看哪個防守者（黃圈），也可以切換俯視回放。</li>
+    </ol>
+    <p class="note">「決策時間」= 你的反應時間 − 這支手機的基本反應時間（校準值），所以不同手機也能公平比較自己的進步。</p>
+    <button class="primary" data-go="home">知道了</button>
+  </div>
+</section>
+
+<!-- 校準 -->
+<section id="calib" class="screen hidden">
+  <div id="calib-pad">
+    <p id="calib-msg">看到圓圈出現就盡快點螢幕<br><small>共 5 次</small></p>
+    <div id="calib-dot" class="hidden"></div>
+  </div>
+</section>
+
+<!-- 結果卡 -->
+<section id="result" class="screen hidden overlay">
+  <div class="card">
+    <h2 id="res-title"></h2>
+    <p id="res-time"></p>
+    <p id="res-coverage" class="tag"></p>
+    <p id="res-explain"></p>
+    <p id="res-mistake" class="note"></p>
+    <div class="btns">
+      <button id="btn-replay">重播</button>
+      <button id="btn-overhead">俯視回放</button>
+      <button class="primary" id="btn-next">下一題</button>
+    </div>
+  </div>
+</section>
+
+<!-- 總結 -->
+<section id="summary" class="screen hidden">
+  <div class="card">
+    <h2>本次訓練</h2>
+    <div id="sum-stats"></div>
+    <table id="sum-table"></table>
+    <button class="primary" id="btn-again">再練一次</button>
+    <button id="btn-export">匯出紀錄（JSON）</button>
+    <button data-go="home">回首頁</button>
+    <textarea id="export-box" class="hidden" readonly></textarea>
+  </div>
+</section>
+
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
