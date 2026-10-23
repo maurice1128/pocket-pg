@@ -3,13 +3,17 @@
 // 擋拆情境以「掩護在控衛右側、控衛往右繞掩護」撰寫；執行時隨機鏡像到左側。
 // 每個角色的動作 = 一串關鍵影格 [t(秒), x, z]，t 以「關鍵防守反應起點 onset」為 0 往前後計。
 // answer: 正確動作（2 分）；partial: 可接受（1 分）；其餘 0 分（計分沿用 Pagé et al., 2019）。
-// 動作代碼：roller / corner / shoot；labels 可依情境改顯示文字。
+// 動作代碼：'shoot'（自己出手）或 'pass:<角色>'（傳給那位隊友）；labels 可依情境改顯示文字。
+// 5v5 角色：PG＝你；O2 強側底角、O3 弱側底角、O4 弱側側翼、O5 掩護者／大個子；X1–X5 是各自的防守者。
+// 題目沒寫到的角色用 DEFAULT_OFFENSE／DEFAULT_DEFENSE 的基本站位（不做關鍵動作，只維持正常防守）。
 // 戰術依據與修正理由見 docs/tactics_audit.md（書目頁碼在該檔第 7 節）。
 // 答案目前為「初版」：只經教科書核對，尚未經 3 位教練一致審核。
 
 export const ACTIONS = {
-  roller: '傳給順下（Roll）',
-  corner: '分球底角（Skip）',
+  'pass:O5': '傳給順下（Roll）',
+  'pass:O3': '分球弱側底角（Skip）',
+  'pass:O2': '傳給強側底角',
+  'pass:O4': '傳給弱側側翼',
   shoot: '急停跳投（Pull-up）',
 };
 
@@ -36,9 +40,60 @@ const PG_DRIVE = [[-1.2, 1.2, 9.0], [-0.6, 1.8, 7.4], [0.0, 2.0, 5.6], [0.6, 1.7
 const DRIVE_X1 = [[-1.2, 1.2, 8.2], [-0.6, 1.9, 7.9], [0.0, 2.3, 6.4], [0.6, 2.1, 5.0], [1.2, 1.8, 4.2]];
 const DUNKER = [[-1.2, -2.9, 0.9], [1.2, -2.9, 0.9]];
 const DUNKER_X5 = [[-1.2, -2.2, 1.6], [1.2, -2.0, 1.7]];
-const DRIVE_LABELS = { roller: '傳給籃下大個子', corner: '分球底角', shoot: '自己上籃／拋投' };
+const DRIVE_LABELS = { 'pass:O5': '傳給籃下大個子', 'pass:O3': '分球弱側底角', shoot: '自己上籃／拋投' };
+
+// 2 打 1 快攻：你和 O2 兩線推進，只有 X1 一個人退防；其他人都還在後場（鏡頭後方）
+const FB_PG = [[-1.2, -1.0, 12.5], [-0.6, -0.8, 10.4], [0.0, -0.6, 8.3], [0.6, -0.4, 6.2], [1.2, -0.3, 4.4]];
+const FB_O2 = [[-1.2, 3.6, 12.2], [-0.6, 3.5, 10.0], [0.0, 3.3, 7.9], [0.6, 2.8, 5.6], [1.2, 2.2, 3.6]];
+const FB_TRAIL = (x, z) => [[-1.2, x, z], [1.2, x * 0.9, z - 3.5]];
+const FB_OFFENSE = { PG: FB_PG, O2: FB_O2, O3: FB_TRAIL(-4.0, 18.5), O4: FB_TRAIL(-1.5, 20.0), O5: FB_TRAIL(1.5, 19.5) };
+const FB_DEFENSE = { X2: FB_TRAIL(2.5, 17.5), X3: FB_TRAIL(-3.0, 17.0), X4: FB_TRAIL(-1.0, 18.5), X5: FB_TRAIL(1.0, 18.0) };
+const FB_LABELS = { 'pass:O2': '傳給隊友上籃', shoot: '自己上籃' };
 
 export const SCENARIOS = [
+  // ---------- Level 1：2 打 1 快攻（tactics_audit.md 第 5 節 N1、N2） ----------
+  {
+    id: 'fb_2v1_commit',
+    status: 'draft',
+    sources: ['NBA Coaches Playbook p.156', 'WABC Coaches Manual p.26', 'Canada Basketball LTAD p.56'],
+    level: 1,
+    play: '2 打 1 快攻',
+    name: '2 打 1：防守者撲向你',
+    coverage: '快攻 2 打 1，唯一的防守者踏出來擋你的上籃路線，離開了你的隊友。',
+    cueRoles: ['X1'],
+    answer: 'pass:O2',
+    partial: [],
+    labels: FB_LABELS,
+    look: { role: 'O2', w: 0.5 },
+    fixedX3: true,
+    explain: '唯一的防守者選擇來擋你，就沒人管你的隊友了。等他踏進你的路線、確定選邊再傳，隊友就是空檔上籃。最佳選擇：傳給隊友。',
+    mistake: '防守者還沒選邊就太早傳，讓他一個人守兩個人；或硬切進他身上。',
+    offense: FB_OFFENSE,
+    defense: Object.assign({}, FB_DEFENSE, {
+      X1: [[-1.2, 0.8, 5.0], [-0.2, 0.6, 5.4], [0.0, 0.3, 5.9], [0.5, -0.2, 6.3], [1.2, -0.3, 5.6]],
+    }),
+  },
+  {
+    id: 'fb_2v1_stay',
+    status: 'draft',
+    sources: ['NBA Coaches Playbook p.156', 'WABC Coaches Manual p.26'],
+    level: 1,
+    play: '2 打 1 快攻',
+    name: '2 打 1：防守者退守隊友',
+    coverage: '快攻 2 打 1，防守者往後退、站在你和隊友之間的傳球路線上。',
+    cueRoles: ['X1'],
+    answer: 'shoot',
+    partial: [],
+    labels: FB_LABELS,
+    look: { role: 'O2', w: 0.5 },
+    fixedX3: true,
+    explain: '防守者往後退、守在傳球路線上，等於把上籃路線讓給你。直接攻籃，逼他出來，他一出來再分給隊友。最佳選擇：自己上籃。',
+    mistake: '硬把球傳給被看住的隊友：防守者就在傳球路線上，球會被抄。',
+    offense: FB_OFFENSE,
+    defense: Object.assign({}, FB_DEFENSE, {
+      X1: [[-1.2, 0.8, 5.0], [0.0, 1.2, 4.6], [0.5, 1.8, 3.9], [1.2, 2.0, 3.0]],
+    }),
+  },
   // ---------- Level 1–2：切入分球 ----------
   {
     id: 'drive_help',
@@ -49,7 +104,7 @@ export const SCENARIOS = [
     name: '切入 vs 底角協防（Help）',
     coverage: '你切進禁區，弱側底角的防守者離開射手，站進你的切入路線。',
     cueRoles: ['X3'],
-    answer: 'corner',
+    answer: 'pass:O3',
     partial: [],
     labels: DRIVE_LABELS,
     explain: '底角防守者（Low man）離開射手來協防你：協防從哪裡來，空檔就在哪裡。在他離開的那一刻把球分到底角。最佳選擇：分球底角。',
@@ -112,7 +167,7 @@ export const SCENARIOS = [
     name: '擋拆 vs 沉退太高（High drop）',
     coverage: '大個子守在罰球線上方擋你的跳投，順下從他身後往籃下跑，弱側沒有人補。',
     cueRoles: ['X5', 'X3'],
-    answer: 'roller',
+    answer: 'pass:O5',
     partial: [],
     explain: '大個子站得太高（High drop），擋住了你的跳投，但順下已經從他身後切進去；底角防守者也沒有內縮去卡順下。最佳選擇：傳給順下。和「沉退」那題比一比：關鍵是大個子站多深。',
     mistake: '習慣性急停跳投：大個子就在你面前，投籃會被干擾。',
@@ -153,7 +208,7 @@ export const SCENARIOS = [
     name: '擋拆 vs 延誤、弱側沒補（Hedge, no tag）',
     coverage: '大個子跳出來擋在你的運球路線上（Hedge），底角防守者留在原地沒有內縮。',
     cueRoles: ['X5', 'X3'],
-    answer: 'roller',
+    answer: 'pass:O5',
     partial: [],
     explain: '大個子延誤（Hedge）時，順下的人暫時沒人管；底角防守者也沒有內縮去卡順下（No tag）。先多運一步拉出角度，從延誤者身側擊地或高吊給順下。要快：延誤一兩步大個子就會回防。最佳選擇：傳給順下。',
     mistake: '急停跳投：延誤的大個子就擋在你面前不到一公尺，投籃會被封。傳底角也不對：底角防守者根本沒離開。',
@@ -169,9 +224,9 @@ export const SCENARIOS = [
     name: '擋拆 vs 包夾（Blitz／Trap）',
     coverage: '兩個防守者同時包夾你，掩護者停在罰球線附近。',
     cueRoles: ['X5'],
-    answer: 'roller',
+    answer: 'pass:O5',
     partial: [],
-    explain: '包夾（Blitz）時有兩個人在你身上，後面就少一個防守者：5 對 5 時是 4 打 3，這個 3 對 3 情境是 2 打 1。掩護者不順到底，停在罰球線附近當短順下（Short roll）。往外運兩步拉開角度，馬上把球交給他，讓他去打以多打少。最佳選擇：傳給短順下。也有教練主張先傳安全球再重組。',
+    explain: '包夾（Blitz）時有兩個人在你身上，後面就少一個防守者，變成 4 打 3（3v3 教學模式是 2 打 1）。掩護者不順到底，停在罰球線附近當短順下（Short roll）。往外運兩步拉開角度，馬上把球交給他，讓他去打以多打少。最佳選擇：傳給短順下。也有教練主張先傳安全球再重組。',
     mistake: '在包夾裡停球、把球舉高，或硬投硬切，都容易失誤。從兩個人頭上跳傳到對面底角，球在空中太久，輪轉的人會抄截。',
     offense: { PG: PG_PATH_BLITZ, O5: SHORT_ROLL_PATH },
     defense: {
@@ -189,7 +244,7 @@ export const SCENARIOS = [
     name: '弱側內縮（Tag）真補位',
     coverage: '大個子延誤，底角防守者轉身全速衝進禁區卡順下。',
     cueRoles: ['X5', 'X3'],
-    answer: 'corner',
+    answer: 'pass:O3',
     partial: [],
     explain: '底角防守者（Low man）轉身、頭也轉向球，全速衝進禁區去卡順下：這是真的內縮補位（Commit／Tag）。協防從哪裡來，空檔就在哪裡，底角射手沒人。在他離開底角的那一刻就出手，跳傳要高、要快。最佳選擇：跳傳底角。',
     mistake: '照原計畫傳順下：補防者已經卡在路線上。',
@@ -210,7 +265,7 @@ export const SCENARIOS = [
     name: '擋拆 vs 換防（Switch）',
     coverage: '大個子換防到你身上，小個子去追順下。',
     cueRoles: ['X5'],
-    answer: 'roller',
+    answer: 'pass:O5',
     partial: ['shoot'],
     explain: '換防（Switch）後，小個子變成在防你的中鋒（錯位 Mismatch）。中鋒順下時用身體把小個子擋在身後（Seal），趁換防還沒站穩就把球送進去。對換過來的大個子急停跳投也可以，但他離你不到一公尺，不是最佳選擇。',
     mistake: '傳底角：底角防守者沒有離開，等於把球傳給被看住的人。',
@@ -231,7 +286,7 @@ export const SCENARIOS = [
     name: '弱側假撲（Stunt）',
     coverage: '大個子延誤，底角防守者往禁區衝一兩步就煞車，又退回底角。',
     cueRoles: ['X5', 'X3'],
-    answer: 'roller',
+    answer: 'pass:O5',
     partial: [],
     explain: '底角防守者只是假撲（Stunt）：衝一兩步就煞車，身體一直面向你，然後退回底角。假撲是要讓你猶豫，替大個子爭取回防時間，他根本沒去卡順下。不要停，趁大個子還沒回來直接傳順下。最佳選擇：傳給順下。',
     mistake: '被假動作騙去跳傳底角：防守者已經退回來，球在空中時他就到了。',
@@ -246,4 +301,13 @@ export const SCENARIOS = [
   },
 ];
 
-export const DEFAULT_OFFENSE = { PG: PG_PATH, O5: ROLL_PATH, O3: CORNER_SPOT };
+// 5v5 基本站位（掩護在右側）：O2 強側底角、O4 弱側側翼（三分線外）；X2 稍微內縮、X4 站在籃框到籃框的中線（split line）協防位置
+export const DEFAULT_OFFENSE = {
+  PG: PG_PATH, O5: ROLL_PATH, O3: CORNER_SPOT,
+  O2: [[-1.2, 6.95, 1.2], [1.2, 6.95, 1.2]],
+  O4: [[-1.2, -5.0, 6.9], [1.2, -5.1, 6.8]],
+};
+export const DEFAULT_DEFENSE = {
+  X2: [[-1.2, 5.9, 1.9], [1.2, 5.8, 2.0]],
+  X4: [[-1.2, -3.4, 5.6], [0.4, -3.1, 5.3], [1.2, -3.3, 5.5]],
+};

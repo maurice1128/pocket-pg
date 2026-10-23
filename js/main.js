@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SCENARIOS, ACTIONS, DEFAULT_OFFENSE } from './scenarios.js';
+import { SCENARIOS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js';
 
 // ---------- 設定 ----------
 // levels：該難度會出的題目等級（初階 → 進階的分級課程）
@@ -139,15 +139,19 @@ function makePlayer(color, defender) {
   return { root, tilt, yaw, com, ring, fadeMats, pos: new THREE.Vector3(), vel: new THREE.Vector3(), acc: new THREE.Vector3(), path: null, defender, faceMode: 'ball', heading: 0 };
 }
 
-const players = {
-  PG: makePlayer(COLORS.pg, false),
-  O5: makePlayer(COLORS.offense, false),
-  O3: makePlayer(COLORS.offense, false),
-  X1: makePlayer(COLORS.defense, true),
-  X5: makePlayer(COLORS.defense, true),
-  X3: makePlayer(COLORS.defense, true),
+// 5v5：PG＝持球的你；O2 強側、O3 弱側底角、O4 弱側側翼、O5 掩護者／大個子；X 是各自的防守者
+const OFFENSE = ['PG', 'O2', 'O3', 'O4', 'O5'];
+const DEFENSE = ['X1', 'X2', 'X3', 'X4', 'X5'];
+const EXTRA_ROLES = ['O2', 'O4', 'X2', 'X4']; // 3v3 教學模式時隱藏
+const players = {};
+for (const r of OFFENSE) players[r] = makePlayer(r === 'PG' ? COLORS.pg : COLORS.offense, false);
+for (const r of DEFENSE) players[r] = makePlayer(COLORS.defense, true);
+const inPlay = (r) => store.players5 !== false || !EXTRA_ROLES.includes(r);
+// 除錯用：__pp.play('題目id') 直接播放某一題
+window.__pp = {
+  players, camera, get rep() { return rep; }, get state() { return state; },
+  play(id) { session = { started: new Date().toISOString(), order: [id], results: [] }; nextRep(); },
 };
-window.__pp = { players, camera, get rep() { return rep; }, get state() { return state; } }; // 除錯用
 
 // 第一人稱的雙手（前臂 + 手掌），每幀依鏡頭位置擺放
 const SKIN = 0xc98b62;
@@ -197,16 +201,22 @@ function buildRep(sc) {
   const posJ = () => [rand(-0.25, 0.25), rand(-0.25, 0.25)];
   const tf = (path, jitterT = 0, pj = [0, 0]) => path.map(([t, x, z]) => [t + jitterT, (x + pj[0]) * mirror, z + pj[1]]);
   const off = Object.assign({}, DEFAULT_OFFENSE, sc.offense);
+  const def = Object.assign({}, DEFAULT_DEFENSE, sc.defense);
   // X3 開場位置在協防點與底角之間隨機（避免看站位就猜題），位移隨時間淡出，終點維持原設計
-  const x3Shift = rand(-0.2, 1.6);
-  const x3Path = sc.defense.X3.map(([t, x, z]) => [t, x + x3Shift * Math.min(1, Math.max(0, (1.2 - t) / 1.2)), z]);
+  const x3Shift = sc.fixedX3 ? 0 : rand(-0.2, 1.6);
+  const x3Path = def.X3.map(([t, x, z]) => [t, x + x3Shift * Math.min(1, Math.max(0, (1.2 - t) / 1.2)), z]);
+  const small = () => [rand(-0.15, 0.15), rand(-0.15, 0.15)];
   const paths = {
     PG: tf(off.PG),
     O5: tf(off.O5),
-    O3: tf(off.O3, 0, [rand(-0.2, 0.05), rand(-0.15, 0.25)]), // 底角射手只往外抖，永遠在三分線外
-    X1: tf(sc.defense.X1, dJitter),
-    X5: tf(sc.defense.X5, dJitter, posJ()),
+    O3: tf(off.O3, 0, sc.fixedX3 ? [0, 0] : [rand(-0.2, 0.05), rand(-0.15, 0.25)]), // 底角射手只往外抖，永遠在三分線外
+    O2: tf(off.O2, 0, small()),
+    O4: tf(off.O4, 0, small()),
+    X1: tf(def.X1, dJitter),
+    X5: tf(def.X5, dJitter, posJ()),
     X3: tf(x3Path, dJitter, [0, rand(-0.2, 0.2)]),
+    X2: tf(def.X2, dJitter, small()),
+    X4: tf(def.X4, dJitter, small()),
   };
   const tStart = Math.min(...Object.values(paths).map((p) => p[0][0]));
   const tEnd = Math.max(...Object.values(paths).map((p) => p[p.length - 1][0]));
@@ -241,7 +251,10 @@ function startSession() {
   const order = [...ids].sort(() => Math.random() - 0.5).slice(0, REPS_PER_SESSION);
   while (order.length < REPS_PER_SESSION) order.push(ids[Math.floor(Math.random() * ids.length)]);
   order.sort(() => Math.random() - 0.5);
-  session = { started: new Date().toISOString(), difficulty: store.difficulty, occlusion: store.occlusion, baseline: store.baseline, order, results: [] };
+  session = {
+    started: new Date().toISOString(), difficulty: store.difficulty, occlusion: store.occlusion, baseline: store.baseline,
+    view: store.view, gyro: gyro.enabled, players: store.players5 !== false ? 5 : 3, order, results: [],
+  };
   nextRep();
 }
 
@@ -257,7 +270,7 @@ function nextRep() {
     p.path = rep.paths[k];
     samplePath(p.path, rep.tStart, p.pos);
     p.vel.set(0, 0, 0); p.acc.set(0, 0, 0);
-    p.root.visible = true;
+    p.root.visible = inPlay(k);
     p.ring.visible = false;
     p.heading = Math.atan2(BASKET.x - p.pos.x, BASKET.z - p.pos.z);
     if (p.defender) p.heading = Math.atan2(players.PG.pos.x - p.pos.x, players.PG.pos.z - p.pos.z);
@@ -290,10 +303,10 @@ function decide(action, eventTime) {
   decision = { scenario: rep.sc.id, action, grade, rtMs: action === 'timeout' ? null : Math.round(rt), decisionMs, mirror: rep.mirror, at: new Date().toISOString() };
   session.results.push(decision);
   $('timer').classList.remove('live');
-  for (const k of ['X1', 'X5', 'X3']) players[k].root.visible = true; // 遮蔽模式作答後恢復畫面
+  for (const k of DEFENSE) players[k].root.visible = inPlay(k); // 遮蔽模式作答後恢復畫面
   // 傳球動畫
-  if (action === 'roller' || action === 'corner') {
-    const target = action === 'roller' ? players.O5 : players.O3;
+  if (action.startsWith('pass:')) {
+    const target = players[action.slice(5)];
     passAnim = { from: ball.position.clone(), target, t: 0 };
   } else if (action === 'shoot') {
     passAnim = { from: ball.position.clone(), target: null, t: 0 };
@@ -317,7 +330,7 @@ function showResult() {
   $('res-explain').textContent = sc.explain;
   const review = sc.status === 'approved' ? '已通過教練審核' : '答案初版：已對照教科書，待教練審核';
   $('res-mistake').textContent = (d.grade === 'correct' ? '' : `常見錯誤：${sc.mistake}　`) + `（${review}；依據：${sc.sources.join('；')}）`;
-  for (const p of Object.values(players)) { p.root.visible = true; p.ring.visible = false; }
+  for (const [k, p] of Object.entries(players)) { p.root.visible = inPlay(k); p.ring.visible = false; }
   for (const r of sc.cueRoles) players[r].ring.visible = true;
   $('btn-overhead').textContent = '俯視回放';
   $('result').classList.remove('peek');
@@ -408,12 +421,14 @@ canvas.addEventListener('pointerup', (e) => {
     const from = firstPerson() ? { x: innerWidth / 2, y: innerHeight * 0.95 } : toScreen(players.PG.pos, 1.0);
     const sw = Math.atan2(dy, dx);
     let best = null, bestDiff = Infinity;
-    for (const [key, act] of [['O5', 'roller'], ['O3', 'corner']]) {
+    for (const key of OFFENSE) {
+      if (key === 'PG' || !inPlay(key)) continue;
       const to = toScreen(players[key].pos, 1.0);
+      if (to.behind) continue; // 鏡頭後方的隊友不列入
       const diff = Math.abs(angDiff(Math.atan2(to.y - from.y, to.x - from.x), sw));
-      if (diff < bestDiff) { bestDiff = diff; best = act; }
+      if (diff < bestDiff) { bestDiff = diff; best = 'pass:' + key; }
     }
-    action = best;
+    action = best || 'shoot';
   }
   const t0 = gesture.t;  // 以手指按下的時間計算反應時間
   gesture = null;
@@ -422,7 +437,7 @@ canvas.addEventListener('pointerup', (e) => {
 const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 function toScreen(p, h) {
   tmp.set(p.x, h, p.z).project(camera);
-  return { x: (tmp.x + 1) / 2 * innerWidth, y: (1 - tmp.y) / 2 * innerHeight };
+  return { x: (tmp.x + 1) / 2 * innerWidth, y: (1 - tmp.y) / 2 * innerHeight, behind: tmp.z > 1 };
 }
 
 // ---------- 每幀更新 ----------
@@ -446,7 +461,7 @@ function updatePlayers(dt, t) {
     const speed = p.vel.length();
     if (p.defender && (p.faceMode === 'ball' || speed < 2.2)) target = Math.atan2(players.PG.pos.x - p.pos.x, players.PG.pos.z - p.pos.z);
     else if (speed > 0.4) target = Math.atan2(p.vel.x, p.vel.z);
-    else target = p === players.O3 ? Math.atan2(players.PG.pos.x - p.pos.x, players.PG.pos.z - p.pos.z) : p.heading;
+    else target = p !== players.PG ? Math.atan2(players.PG.pos.x - p.pos.x, players.PG.pos.z - p.pos.z) : p.heading; // 站定的隊友面向球
     p.heading += angDiff(target, p.heading) * (1 - Math.exp(-8 * dt));
     p.yaw.rotation.y = p.heading;
     // 傾斜：重心往加速方向偏
@@ -511,7 +526,10 @@ function updateCamera(dt) {
     // 眼睛略往後 0.3 m（頭部中心），視線微微往下，讓雙手和球進入畫面下緣
     const back = new THREE.Vector3(pg.x - BASKET.x, 0, pg.z - BASKET.z).normalize();
     desiredPos.set(pg.x, 1.82, pg.z).addScaledVector(back, 0.3);
-    desiredLook.copy(BASKET).setY(0.1).lerp(weak, 0.3);
+    // 題目可指定視線偏向哪個隊友（例：快攻時看籃框與跑邊線的隊友之間）
+    const look = rep && rep.sc.look;
+    if (look) desiredLook.copy(BASKET).setY(0.1).lerp(tmp.copy(players[look.role].pos).setY(0.9), look.w);
+    else desiredLook.copy(BASKET).setY(0.1).lerp(weak, 0.3);
   } else {
     // 越肩視角：控衛後上方，看向籃框方向
     const toBasket = new THREE.Vector3(BASKET.x - pg.x, 0, BASKET.z - pg.z).normalize();
@@ -608,7 +626,7 @@ function frame(now) {
         $('timer').classList.add('live');
         $('timer-fill').style.transform = `scaleX(${Math.max(0, 1 - since / win)})`;
         if (cfg().hintRing) for (const r of rep.sc.cueRoles) players[r].ring.visible = since < 0.6;
-        if (store.occlusion && since > (rep.sc.occludeAfter ?? OCCLUDE_AFTER)) for (const k of ['X1', 'X5', 'X3']) players[k].root.visible = false;
+        if (store.occlusion && since > (rep.sc.occludeAfter ?? OCCLUDE_AFTER)) for (const k of DEFENSE) players[k].root.visible = false;
         if (since > win) decide('timeout', simToPerf(rep.onset + win));
       }
       updateBall(dt, t);
@@ -649,12 +667,18 @@ function refreshHome() {
   for (const b of $('viewmode').children) b.classList.toggle('on', b.dataset.v === store.view);
   $('occl').checked = !!store.occlusion;
   $('gyro').checked = !!store.gyro;
+  for (const b of $('teamsize').children) b.classList.toggle('on', b.dataset.v === (store.players5 !== false ? '5' : '3'));
   $('base-label').textContent = store.baseline ? `${store.baseline} ms（這支手機）` : '尚未校準（第一次開始會先校準）';
 }
 $('diff').addEventListener('click', (e) => {
   const v = e.target.dataset && e.target.dataset.v;
   if (!v) return;
   store.difficulty = v; save(store); refreshHome();
+});
+$('teamsize').addEventListener('click', (e) => {
+  const v = e.target.dataset && e.target.dataset.v;
+  if (!v) return;
+  store.players5 = v === '5'; save(store); refreshHome();
 });
 $('viewmode').addEventListener('click', (e) => {
   const v = e.target.dataset && e.target.dataset.v;
