@@ -584,9 +584,9 @@ export const SCENARIOS = [
   },
   {
     id: 'pnr_high_drop',
-    evidence: 'weak', // 依 docs/citation_check.md 第 3 節
+    evidence: 'medium', // 依 docs/citation_check.md 第 3 節
     status: 'draft', // draft → coach_1 → approved（3 位教練一致）
-    sources: ['thehoopsgeek.com/pick-and-roll-defense', '[目前沒有書面依據，需教練確認]'],
+    sources: ['thehoopsgeek.com/pick-and-roll-defense［網］', '[沒有書面依據，需教練確認]'],
     level: 2,
     play: '高位擋拆',
     name: '擋拆 vs 沉退太高（High drop）',

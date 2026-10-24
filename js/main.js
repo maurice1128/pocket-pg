@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0600';
+import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0602';
 
 // ---------- 設定 ----------
 // levels：該難度會出的題目等級（初階 → 進階的分級課程）
@@ -272,6 +272,8 @@ function startSession() {
   const needsExtra = (s) => [s.answer, ...(s.partial || []), ...(s.resetTargets || []).map((r) => 'pass:' + r)]
     .some((a) => a === 'pass:O2' || a === 'pass:O4');
   const ids = [...SCENARIOS, ...POSSESSIONS]
+    // 書面依據弱的題目不進一般訓練，等教練確認（evidence 改成 medium 以上，或 status 改成 approved）
+    .filter((s) => s.evidence !== 'weak' || s.status === 'approved')
     .filter((s) => !s.chainOnly && cfg().levels.includes(s.level) && (store.players5 !== false || !needsExtra(s)))
     .map((s) => s.id);
   const order = [...ids].sort(() => Math.random() - 0.5).slice(0, REPS_PER_SESSION);
