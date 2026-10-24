@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="theme-color" content="#14161a">
 <title>口袋控衛 Pocket PG</title>
-<link rel="stylesheet" href="style.css?v=0800">
+<link rel="stylesheet" href="style.css?v=0802">
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
 </script>
@@ -16,7 +16,7 @@
 <!-- 比賽中 HUD -->
 <div id="hud" class="hidden">
   <div id="hud-top"><span id="hud-rep"></span><span id="hud-play">高位擋拆</span><span id="hud-score"></span></div>
-  <div id="hud-hint">點隊友或往隊友滑＝傳</div>
+  <div id="hud-hint">按一下＝投　長按＝切　滑向隊友＝傳</div>
   <div id="actions">
     <button id="btn-drive" aria-label="切入">切</button>
     <button id="btn-shoot" aria-label="投籃">投</button>
@@ -31,7 +31,7 @@
 <section id="home" class="screen">
   <div class="card">
     <h1>口袋控衛</h1>
-    <p class="sub">Pocket PG · 擋拆閱讀訓練（原型）</p>
+    <p class="sub">Pocket PG · 控衛閱讀訓練（原型）</p>
     <div class="row">
       <label for="topic">練習主題</label>
       <select id="topic"></select>
@@ -81,17 +81,13 @@
   <div class="card">
     <h2>怎麼玩</h2>
     <ol>
-      <li>你是控衛（藍色、持球）。新手從切入分球開始，之後是高位擋拆。</li>
-      <li>紅色是防守者。看他們怎麼應對：協防有沒有離開射手、擋拆時大個子沉退、延誤、包夾還是換防，以及弱側底角的防守者是真內縮還是假撲。</li>
-      <li>難度決定題目等級：新手（第 1–2 級）、標準（1–3 級）、進階（2–4 級）。</li>
-      <li>人數：預設 5v5，和真實比賽一樣；「3v3 教學」會藏起兩組球員，畫面比較乾淨，適合先理解概念。</li>
-      <li>轉頭模式：第一人稱下轉動手機，視線跟著轉，弱側要自己轉過去看。滑動傳球時手機在轉也沒關係，系統會依轉動角度校正。建議先在手機設定關掉「自動旋轉」、鎖定橫向，畫面才不會突然翻轉。</li>
-      <li>在時間條跑完前做決定：<b>點一下</b>＝自己出手（投籃或上籃）；<b>往隊友的方向滑</b>（或滑到他身上放開）＝傳給他；<b>長按</b>＝運球切入。</li>
-      <li>不是每一球都要馬上攻擊。外圍觀察的題目時間比較寬鬆；看不到機會時，不要硬打：把球傳給外圍的安全接應者（轉移球）。</li>
-      <li>太早做決定（防守還沒動）算「猜的」；太慢算「猶豫」。</li>
-      <li>每題結束會告訴你該看哪個防守者（黃圈），也可以切換俯視回放。</li>
+      <li>你是控衛（藍色）。紅色是防守者，看他們怎麼動。</li>
+      <li><b>按一下</b>＝投；<b>長按</b>＝切入；<b>往隊友滑</b>（或滑到他身上放開）＝傳給他。右下角的「投」「切」按鈕也可以用。</li>
+      <li>你會原地運球等你決定。太早＝猜的；太慢一樣會做，但球不進或被抄。</li>
+      <li>沒機會就轉移球，傳給外圍隊友。連續回合會一直打下去，直到出手或被抄。</li>
+      <li>結束後黃圈標出該看的防守者，「看解說」有原因和書目。</li>
     </ol>
-    <p class="note">「決策時間」= 你的反應時間 − 這支手機的基本反應時間（校準值），所以不同手機也能公平比較自己的進步。</p>
+    <p class="note">轉頭模式：轉手機看弱側，滑動方向會自動校正；建議鎖定橫向。決策時間已扣掉校準的手機反應時間。</p>
     <button class="primary" data-go="home">知道了</button>
   </div>
 </section>
@@ -137,6 +133,6 @@
   </div>
 </section>
 
-<script type="module" src="js/main.js?v=0800"></script>
+<script type="module" src="js/main.js?v=0802"></script>
 </body>
 </html>
