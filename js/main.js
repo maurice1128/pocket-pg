@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0815';
+import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0816';
 
 // ---------- 設定 ----------
 // levels：該難度會出的題目等級（初階 → 進階的分級課程）
