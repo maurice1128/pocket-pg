@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0602';
+import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0603';
 
 // ---------- 設定 ----------
 // levels：該難度會出的題目等級（初階 → 進階的分級課程）
@@ -518,8 +518,8 @@ canvas.addEventListener('pointerup', (e) => {
     let best = null, bestDiff = Infinity, onTarget = null, onDist = Math.max(60, innerWidth * 0.08);
     for (const key of OFFENSE) {
       if (key === 'PG' || !inPlay(key)) continue;
+      // 方向跟著畫面：看到隊友在哪就往哪滑；不在畫面裡的隊友，往他那一側的螢幕邊緣滑
       const to = toScreen(players[key].pos, 1.0);
-      if (to.behind) continue; // 鏡頭後方的隊友不列入
       const diff = Math.abs(angDiff(Math.atan2(to.y - from.y, to.x - from.x), sw));
       if (diff < bestDiff) { bestDiff = diff; best = 'pass:' + key; }
       // 手指放開的位置落在隊友身上（含上半身）＝明確要傳給他
@@ -540,8 +540,14 @@ canvas.addEventListener('pointerup', (e) => {
 });
 const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 function toScreen(p, h) {
+  // 鏡頭後方的隊友投影會翻轉；改用鏡頭座標判斷他在左邊還是右邊，放到該側螢幕外面
+  const cs = tmp.set(p.x, h, p.z).applyMatrix4(camera.matrixWorldInverse);
+  if (cs.z > -0.05) {
+    const side = cs.x >= 0 ? 1 : -1;
+    return { x: innerWidth / 2 + side * innerWidth * 2, y: innerHeight * 0.5, behind: true, side };
+  }
   tmp.set(p.x, h, p.z).project(camera);
-  return { x: (tmp.x + 1) / 2 * innerWidth, y: (1 - tmp.y) / 2 * innerHeight, behind: tmp.z > 1 };
+  return { x: (tmp.x + 1) / 2 * innerWidth, y: (1 - tmp.y) / 2 * innerHeight, behind: false };
 }
 
 // ---------- 每幀更新 ----------
