@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0610';
+import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0614';
 
 // ---------- 設定 ----------
 // levels：該難度會出的題目等級（初階 → 進階的分級課程）
@@ -136,10 +136,16 @@ function makePlayer(color, defender) {
   ring.position.y = 0.008;
   ring.visible = false;
   root.add(ring);
+  // 瞄準圈：手指滑動時，即將接球的隊友腳下顯示白圈
+  const aim = new THREE.Mesh(new THREE.RingGeometry(0.42, 0.56, 28), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95 }));
+  aim.rotation.x = -Math.PI / 2;
+  aim.position.y = 0.01;
+  aim.visible = false;
+  root.add(aim);
   scene.add(root);
   const fadeMats = [body.material, head.material, nose.material];
   for (const m of fadeMats) m.transparent = true;
-  return { root, tilt, yaw, com, ring, fadeMats, pos: new THREE.Vector3(), vel: new THREE.Vector3(), acc: new THREE.Vector3(), path: null, defender, faceMode: 'ball', heading: 0 };
+  return { root, tilt, yaw, com, ring, aim, fadeMats, pos: new THREE.Vector3(), vel: new THREE.Vector3(), acc: new THREE.Vector3(), path: null, defender, faceMode: 'ball', heading: 0 };
 }
 
 // 5v5：PG＝持球的你；O2 強側、O3 弱側底角、O4 弱側側翼、O5 掩護者／大個子；X 是各自的防守者
@@ -510,6 +516,7 @@ canvas.addEventListener('touchmove', (e) => { if (state === 'play') e.preventDef
 canvas.addEventListener('pointerdown', (e) => {
   if (state !== 'play') { gesture = null; return; }
   const g = gesture = { x: e.clientX, y: e.clientY, t: e.timeStamp, id: e.pointerId, rep, moved: false };
+  g.yaw0 = gyro.yaw; // 記下按下那一刻的視線方向，放開時校正轉動造成的偏移
   g.timer = setTimeout(() => {
     if (gesture !== g || g.held || state !== 'play' || g.rep !== rep) return;
     if (Math.hypot(g.lastX - g.x, g.lastY - g.y) > HOLD_SLOP) return; // 手指已經在滑，不算長按
@@ -521,19 +528,36 @@ canvas.addEventListener('pointerdown', (e) => {
   try { canvas.setPointerCapture(e.pointerId); } catch { /* 忽略 */ }
 });
 canvas.addEventListener('pointermove', (e) => {
-  if (gesture && e.pointerId === gesture.id) { gesture.lastX = e.clientX; gesture.lastY = e.clientY; }
+  if (!gesture || e.pointerId !== gesture.id) return;
+  gesture.lastX = e.clientX; gesture.lastY = e.clientY;
+  // 即時預覽：照目前的滑動方向，誰會接到球
+  const a = state === 'play' ? classifySwipe(compensateStartX(gesture.x, gesture), gesture.y, e.clientX, e.clientY) : '';
+  showAim(a.startsWith('pass:') ? a.slice(5) : null);
 });
+function showAim(role) { for (const [k, p] of Object.entries(players)) p.aim.visible = k === role; }
 // 被瀏覽器取消時：如果手指幾乎沒動，計時器照樣可以判長按；只清掉「放開」要用的資料
-canvas.addEventListener('pointercancel', () => { if (gesture) gesture.cancelled = true; });
+canvas.addEventListener('pointercancel', () => { showAim(null); if (gesture) gesture.cancelled = true; });
 canvas.addEventListener('pointerup', (e) => {
+  showAim(null);
   if (gesture) clearTimeout(gesture.timer);
   if (state !== 'play' || !gesture || e.pointerId !== gesture.id || gesture.rep !== rep || gesture.cancelled) { gesture = null; return; }
-  const action = classifySwipe(gesture.x, gesture.y, e.clientX, e.clientY);
+  const action = classifySwipe(compensateStartX(gesture.x, gesture), gesture.y, e.clientX, e.clientY);
   const t0 = gesture.t;  // 以手指按下的時間計算反應時間
   gesture = null;
   decide(action, t0);
 });
 const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
+
+// 轉頭模式下，手指按著時手機可能在轉：把按下那一刻的起點，換算到目前畫面上的位置（同一個看出去的方向）
+function compensateStartX(sx, g) {
+  if (!gyro.enabled || g.yaw0 == null) return sx;
+  const dYaw = gyro.yaw - g.yaw0;                       // 正值＝視線往左轉
+  const tanHalfH = Math.tan(camera.fov * Math.PI / 360) * camera.aspect;
+  const half = innerWidth / 2;
+  const ang = Math.atan((sx - half) / half * tanHalfH);  // 起點對應的水平視角
+  const ang2 = Math.max(-1.5, Math.min(1.5, ang + dYaw)); // 視線左轉，同一個方向在畫面上往右移
+  return half + Math.tan(ang2) / tanHalfH * half;
+}
 
 // 手勢判定：點一下＝自己出手；滑（任何方向）＝傳球（長按切入在 pointerdown 的計時器處理）
 function classifySwipe(sx, sy, ex, ey) {
@@ -804,6 +828,11 @@ function frame(now) {
     }
     updateCamera(dt);
     fadeNearPlayers();
+    // 動態瞄準：手指按著時，每一格都用最新的隊友位置與手機轉動重算誰會接球（不只在手指移動時）
+    if (state === 'play' && gesture && gesture.lastX != null && Math.hypot(gesture.lastX - gesture.x, gesture.lastY - gesture.y) >= SWIPE_MIN) {
+      const a = classifySwipe(compensateStartX(gesture.x, gesture), gesture.y, gesture.lastX, gesture.lastY);
+      showAim(a.startsWith('pass:') ? a.slice(5) : null);
+    }
   } else {
     // 首頁背景：慢慢環繞球場
     setArmsVisible(false);
@@ -855,7 +884,7 @@ $('gyro').addEventListener('change', async (e) => {
     $('gyro-note').textContent = '沒有取得陀螺儀權限';
   } else {
     gyro.enabled = e.target.checked;
-    $('gyro-note').textContent = gyro.enabled ? '開始訓練後，轉動手機就能轉頭' : '拿手機轉動，畫面跟著轉';
+    $('gyro-note').textContent = gyro.enabled ? '開始後轉動手機就能轉頭（建議關掉手機的自動旋轉）' : '拿手機轉動，畫面跟著轉';
     setTimeout(() => { if (gyro.enabled && !gyro.seen) $('gyro-note').textContent = '這台裝置沒有偵測到陀螺儀'; }, 1200);
   }
   store.gyro = gyro.enabled; save(store);
