@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pocket PG 戰術圖</title>
+<style>
+  :root { --bg: #f7f5f0; --fg: #1d1f24; --muted: #6a6f78; --court: #efe2c8; --line: #8a7b62; --off: #2557b8; --def: #c9412f; --key: #e0a400; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font-family: "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif; padding: 16px; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  .legend { color: var(--muted); font-size: 13px; margin-bottom: 12px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 12px; }
+  .card { background: #fff; border: 1px solid #ddd6c8; border-radius: 10px; padding: 10px; }
+  .card h2 { font-size: 14px; margin: 0 0 2px; }
+  .card p { font-size: 12px; margin: 2px 0; color: var(--muted); line-height: 1.4; }
+  .card .ans { color: var(--fg); font-weight: 700; }
+  svg { width: 100%; height: auto; display: block; margin-top: 6px; }
+</style>
+</head>
+<body>
+<h1>Pocket PG 戰術圖（俯視半場，籃框在上）</h1>
+<div class="legend">藍＝進攻（PG＝你）、紅＝防守；圓點＝開場位置，線＝跑動路線，箭頭＝終點；黃色外框＝關鍵防守者。粗虛線段＝關鍵反應（onset）之後的動作。掩護在右側的版本（遊戲中會隨機左右鏡像）。</div>
+<div class="grid" id="grid"></div>
+<script type="module">
+import { SCENARIOS, DEFAULT_OFFENSE, DEFAULT_DEFENSE, ACTIONS } from '../js/scenarios.js';
+const S = 22; // 1 m = 22 px
+const W = 15 * S, H = 14 * S; // 顯示整個半場 0–14 m
+const X = (x) => (x + 7.5) * S, Y = (z) => z * S + 6;
+const court = () => {
+  const arcR = 6.75 * S, aMax = Math.asin(6.6 / 6.75), bx = X(0), by = Y(1.575);
+  const pt = (a) => `${bx + arcR * Math.sin(a)},${by + arcR * Math.cos(a)}`;
+  const cz = 1.575 + Math.sqrt(6.75 ** 2 - 6.6 ** 2);
+  return `<rect x="0" y="0" width="${W}" height="${H + 6}" fill="var(--court)"/>
+  <g fill="none" stroke="var(--line)" stroke-width="1.2">
+   <rect x="${X(-7.5)}" y="${Y(0)}" width="${15 * S}" height="${H}"/>
+   <rect x="${X(-2.45)}" y="${Y(0)}" width="${4.9 * S}" height="${5.8 * S}"/>
+   <path d="M ${X(-1.8)} ${Y(5.8)} A ${1.8 * S} ${1.8 * S} 0 0 0 ${X(1.8)} ${Y(5.8)}"/>
+   <line x1="${X(-6.6)}" y1="${Y(0)}" x2="${X(-6.6)}" y2="${Y(cz)}"/><line x1="${X(6.6)}" y1="${Y(0)}" x2="${X(6.6)}" y2="${Y(cz)}"/>
+   <path d="M ${pt(-aMax)} A ${arcR} ${arcR} 0 0 0 ${pt(aMax)}"/>
+   <circle cx="${bx}" cy="${by}" r="${0.225 * S}" stroke="#d2581e"/>
+   <line x1="${X(-0.9)}" y1="${Y(1.2)}" x2="${X(0.9)}" y2="${Y(1.2)}" stroke="#555" stroke-width="2"/>
+  </g>`;
+};
+const sample = (path, t) => {
+  if (t <= path[0][0]) return [path[0][1], path[0][2]];
+  for (let i = 0; i < path.length - 1; i++) { const [t0, x0, z0] = path[i], [t1, x1, z1] = path[i + 1]; if (t <= t1) { const u = (t - t0) / (t1 - t0); return [x0 + (x1 - x0) * u, z0 + (z1 - z0) * u]; } }
+  const l = path[path.length - 1]; return [l[1], l[2]];
+};
+const drawPath = (path, color, key) => {
+  const pre = path.filter((p) => p[0] <= 0), post = path.filter((p) => p[0] >= 0);
+  const on = sample(path, 0);
+  const prePts = [...pre.map((p) => [p[1], p[2]]), on];
+  const postPts = [on, ...post.map((p) => [p[1], p[2]])];
+  const line = (pts, dash, w) => pts.length > 1 ? `<polyline points="${pts.map((p) => `${X(p[0])},${Y(p[1])}`).join(' ')}" fill="none" stroke="${color}" stroke-width="${w}" ${dash ? 'stroke-dasharray="5 3"' : ''} marker-end="url(#a-${color === 'var(--off)' ? 'o' : 'd'})"/>` : '';
+  const s = path[0];
+  return line(prePts, false, 1.4) + line(postPts, true, 2.4) +
+    `<circle cx="${X(s[1])}" cy="${Y(s[2])}" r="5" fill="${color}" ${key ? 'stroke="var(--key)" stroke-width="3"' : ''}/>`;
+};
+const label = (path, text, color) => { const s = path[0]; return `<text x="${X(s[1]) + 6}" y="${Y(s[2]) - 6}" font-size="10" fill="${color}" font-weight="700">${text}</text>`; };
+const grid = document.getElementById('grid');
+for (const sc of SCENARIOS) {
+  const off = Object.assign({}, DEFAULT_OFFENSE, sc.offense), def = Object.assign({}, DEFAULT_DEFENSE, sc.defense);
+  let g = '';
+  for (const [r, p] of Object.entries(off)) { g += drawPath(p, 'var(--off)', false) + label(p, r === 'PG' ? '你' : r, 'var(--off)'); }
+  for (const [r, p] of Object.entries(def)) { const key = (sc.cueRoles || []).includes(r); g += drawPath(p, 'var(--def)', key) + label(p, r, 'var(--def)'); }
+  const ans = (sc.labels && sc.labels[sc.answer]) || ACTIONS[sc.answer] || ({ drive: '切入', reset: '轉移球／重新組織' })[sc.answer] || sc.answer;
+  grid.insertAdjacentHTML('beforeend', `<div class="card" id="${sc.id}"><h2>${sc.name}</h2>
+    <p>${sc.id}｜L${sc.level}｜${sc.coverage}</p><p class="ans">答案：${ans}${sc.partial && sc.partial.length ? '（部分分：' + sc.partial.join('、') + '）' : ''}</p>
+    <svg viewBox="0 0 ${W} ${H + 6}"><defs>
+      <marker id="a-o" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--off)"/></marker>
+      <marker id="a-d" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="5" markerHeight="5" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--def)"/></marker>
+    </defs>${court()}${g}</svg></div>`);
+}
+</script>
+</body>
+</html>

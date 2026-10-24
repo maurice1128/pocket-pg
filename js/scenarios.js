@@ -141,8 +141,9 @@ export const SCENARIOS = [
   // ---------- Level 1：2 打 1 快攻（tactics_audit.md 第 5 節 N1、N2） ----------
   {
     id: 'fb_2v1_commit',
+    evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
-    sources: ['NBA Coaches Playbook p.156', 'WABC Coaches Manual p.27（印刷頁）', 'Canada Basketball LTAD p.56'],
+    sources: ['NBA Coaches Playbook p.166–167', 'WABC Coaches Manual p.21（Driving Lane）'],
     level: 1,
     play: '快攻',
     name: '2 打 1：防守者撲向你',
@@ -162,8 +163,9 @@ export const SCENARIOS = [
   },
   {
     id: 'fb_2v1_stay',
+    evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
-    sources: ['NBA Coaches Playbook p.156', 'WABC Coaches Manual p.27（印刷頁）'],
+    sources: ['NBA Coaches Playbook p.166–167', 'WABC Coaches Manual p.27'],
     level: 1,
     play: '快攻',
     name: '2 打 1：防守者退守隊友',
@@ -185,8 +187,9 @@ export const SCENARIOS = [
   // A1／A2 是姊妹題：開場完全相同，只有上方防守者 X1 的動作不同
   {
     id: 'fb_3v2_top_stop',
+    evidence: 'medium', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
-    sources: ['NBA Coaches Playbook p.167', 'ASEP p.137、p.139', 'WABC Coaches Manual p.21', 'Canada Basketball LTAD p.56', '[推論，需教練確認]'],
+    sources: ['WABC Coaches Manual p.21', 'NBA Coaches Playbook p.166–167', '[由 2 打 1 原則推論，需教練確認]'],
     level: 1,
     play: '快攻',
     name: '3 打 2：上方防守者擋球',
@@ -206,8 +209,9 @@ export const SCENARIOS = [
   },
   {
     id: 'fb_3v2_top_sag',
+    evidence: 'weak', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
-    sources: ['NBA Coaches Playbook p.167', 'WABC Coaches Manual p.21、p.27', '[推論，需教練確認]'],
+    sources: ['NBA Coaches Playbook p.166–167', 'WABC Coaches Manual p.21、p.27', '[由 2 打 1 原則推論，需教練確認]'],
     level: 1,
     play: '快攻',
     name: '3 打 2：上方防守者後退',
@@ -227,8 +231,9 @@ export const SCENARIOS = [
   },
   {
     id: 'fb_even_pullout',
+    evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
-    sources: ['ASEP p.138–139', 'NBA Coaches Playbook p.136、p.169、p.180', 'Canada Basketball LTAD p.56'],
+    sources: ['ASEP p.138–139', 'NBA Coaches Playbook p.136、p.180', 'Canada Basketball LTAD PDF p.58（背景）'],
     level: 2,
     play: '快攻',
     name: '防守人數到齊：拉出來組織',
@@ -257,8 +262,9 @@ export const SCENARIOS = [
   // ---------- Level 1–2：切入分球 ----------
   {
     id: 'drive_help',
+    evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft', // draft → coach_1 → approved（3 位教練一致）
-    sources: ['ASEP p.132–134', 'NBA Coaches Playbook p.81 圖 5.14'],
+    sources: ['ASEP p.132–134', 'NBA Coaches Playbook p.81 圖 5.14（強側協防，原理相同）'],
     level: 1,
     play: '持球切入',
     name: '切入 vs 底角協防（Help）',
@@ -279,8 +285,9 @@ export const SCENARIOS = [
   },
   {
     id: 'drive_nohelp',
+    evidence: 'medium', // 依 docs/citation_check.md 第 3 節
     status: 'draft', // draft → coach_1 → approved（3 位教練一致）
-    sources: ['ASEP p.133', 'NBA Coaches Playbook p.81'],
+    sources: ['NBA Coaches Playbook p.21（Direct Drive）', 'ASEP p.133'],
     level: 1,
     play: '持球切入',
     name: '切入 vs 沒有協防',
@@ -302,8 +309,9 @@ export const SCENARIOS = [
   // ---------- Level 2：切入分球進階（scenario_bank_v2 B1、B2） ----------
   {
     id: 'drive_baseline_corner',
+    evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
-    sources: ['NBA Coaches Playbook p.81 圖 5.14', 'ASEP p.114、p.134'],
+    sources: ['NBA Coaches Playbook p.81 圖 5.14', 'ASEP p.134'],
     level: 2,
     play: '持球切入',
     name: '底線突破 vs 強側底角協防',
@@ -328,8 +336,9 @@ export const SCENARIOS = [
   },
   {
     id: 'drive_nail_help',
+    evidence: 'medium', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
-    sources: ['ASEP p.134', 'coachingtoolbox.net/defense/defending-nba-pick-roll.html'],
+    sources: ['ASEP p.134', 'coachingtoolbox.net/defense/defending-nba-pick-roll.html（擋拆情境類推）'],
     level: 2,
     play: '持球切入',
     name: '中路切入 vs Nail 協防',
@@ -355,6 +364,7 @@ export const SCENARIOS = [
   // ---------- Level 2–3：撲防閱讀（scenario_bank_v2 C1–C3）：你在側翼接球，三題開場相同 ----------
   {
     id: 'closeout_late_shoot',
+    evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
     sources: ['ASEP p.133', 'NBA Coaches Playbook p.21', 'WABC Coaches Manual p.19'],
     level: 2,
@@ -376,6 +386,7 @@ export const SCENARIOS = [
   },
   {
     id: 'closeout_flyby_drive',
+    evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
     sources: ['NBA Coaches Playbook p.165、p.234', 'ASEP p.133', 'WABC Coaches Manual p.19'],
     level: 2,
@@ -397,6 +408,7 @@ export const SCENARIOS = [
   },
   {
     id: 'closeout_extra_pass',
+    evidence: 'medium', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
     sources: ['ASEP p.133', 'NBA Coaches Playbook p.68、p.79、p.87', 'hooperuniversity.com/breakdowns/understanding-how-to-play-with-the-advantage'],
     level: 3,
@@ -420,8 +432,9 @@ export const SCENARIOS = [
   // H1／H2／H3 是三姊妹：開場完全相同，只有 X1 的撲防不同（早到站好／太慢還在衝／準時碎步）
   {
     id: 'noadv_wing_reverse',
+    evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
-    sources: ['NBA Coaches Playbook p.77、p.79', 'ASEP p.114、p.121、p.157', 'WABC Coaches Manual p.18、p.30'],
+    sources: ['NBA Coaches Playbook p.77、p.79', 'ASEP p.157', 'WABC Coaches Manual p.30'],
     level: 1,
     play: '側翼持球',
     name: '側翼：五個防守者都站好',
@@ -442,6 +455,7 @@ export const SCENARIOS = [
   },
   {
     id: 'noadv_swing_late_closeout',
+    evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
     sources: ['NBA Coaches Playbook p.79、p.85、p.229', 'ASEP p.133', 'WABC Coaches Manual p.19'],
     level: 2,
@@ -463,8 +477,9 @@ export const SCENARIOS = [
   },
   {
     id: 'noadv_swing_again',
+    evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
-    sources: ['NBA Coaches Playbook p.77、p.79、p.83', 'ASEP p.148'],
+    sources: ['NBA Coaches Playbook p.77、p.79、p.83'],
     level: 2,
     play: '側翼持球',
     name: '轉移後防守到位',
@@ -486,8 +501,9 @@ export const SCENARIOS = [
   // H4：和 drive_help／drive_nohelp／drive_nail_help 同開場（onset 前只有 X5 先站到籃框前）
   {
     id: 'noadv_drive_wall',
+    evidence: 'medium', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
-    sources: ['NBA Coaches Playbook p.81–82', 'ASEP p.115、p.133', 'hooperuniversity.com/breakdowns/understanding-how-to-play-with-the-advantage'],
+    sources: ['hooperuniversity.com/breakdowns/understanding-how-to-play-with-the-advantage', 'NBA Coaches Playbook p.81–82（部分支持）', 'ASEP p.115（書建議改傳球）'],
     level: 2,
     play: '持球切入',
     name: '切入撞牆：協防早已站好',
@@ -514,6 +530,7 @@ export const SCENARIOS = [
   // ---------- Level 2：無球隊友閱讀：後門切（scenario_bank_v2 E1） ----------
   {
     id: 'backdoor_overplay',
+    evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
     sources: ['ASEP p.82、p.114、p.140–142', 'NBA Coaches Playbook p.113、p.117', 'WABC Coaches Manual p.17'],
     level: 2,
@@ -546,8 +563,9 @@ export const SCENARIOS = [
   // ---------- Level 2：擋拆基礎 ----------
   {
     id: 'pnr_drop',
+    evidence: 'medium', // 依 docs/citation_check.md 第 3 節
     status: 'draft', // draft → coach_1 → approved（3 位教練一致）
-    sources: ['NBA Coaches Playbook p.256', 'ASEP p.148', 'FIBA OBRI 26-3'],
+    sources: ['NBA Coaches Playbook p.256', 'FIBA OBRI 2024 26-3（p.51）'],
     level: 2,
     play: '高位擋拆',
     name: '擋拆 vs 沉退（Drop）',
@@ -566,8 +584,9 @@ export const SCENARIOS = [
   },
   {
     id: 'pnr_high_drop',
+    evidence: 'weak', // 依 docs/citation_check.md 第 3 節
     status: 'draft', // draft → coach_1 → approved（3 位教練一致）
-    sources: ['ASEP p.148', 'thehoopsgeek.com/pick-and-roll-defense'],
+    sources: ['thehoopsgeek.com/pick-and-roll-defense', '[目前沒有書面依據，需教練確認]'],
     level: 2,
     play: '高位擋拆',
     name: '擋拆 vs 沉退太高（High drop）',
@@ -586,6 +605,7 @@ export const SCENARIOS = [
   },
   {
     id: 'pnr_under',
+    evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft', // draft → coach_1 → approved（3 位教練一致）
     sources: ['NBA Coaches Playbook p.58 圖 4.22、p.60 圖 4.28、p.256–257', 'ASEP p.148'],
     level: 2,
@@ -607,8 +627,9 @@ export const SCENARIOS = [
   // ---------- Level 3：擋拆進階 ----------
   {
     id: 'pnr_hedge',
+    evidence: 'medium', // 依 docs/citation_check.md 第 3 節
     status: 'draft', // draft → coach_1 → approved（3 位教練一致）
-    sources: ['NBA Coaches Playbook p.54 圖 4.4、p.63–64、p.255–256', 'ASEP p.146、p.203'],
+    sources: ['ASEP p.146、p.203', 'NBA Coaches Playbook p.85、p.255–256', 'thehoopsgeek.com/pick-and-roll-defense'],
     level: 3,
     play: '高位擋拆',
     name: '擋拆 vs 延誤、弱側沒補（Hedge, no tag）',
@@ -624,8 +645,9 @@ export const SCENARIOS = [
   // pnr_hedge 的姊妹題（scenario_bank_v2 D4）：onset 前完全相同，之後大個子馬上退回、你的防守者追回
   {
     id: 'pnr_hedge_recovered',
+    evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
-    sources: ['NBA Coaches Playbook p.53、p.77、p.79', 'ASEP p.148'],
+    sources: ['NBA Coaches Playbook p.53、p.77、p.79'],
     level: 3,
     play: '高位擋拆',
     name: '延誤成功、兩人都回位（Hedge recovered）',
@@ -644,6 +666,7 @@ export const SCENARIOS = [
   },
   {
     id: 'pnr_blitz',
+    evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft', // draft → coach_1 → approved（3 位教練一致）
     sources: ['ASEP p.148、p.126、p.184', 'NBA Coaches Playbook p.59–60 圖 4.25、p.257 圖 16.1、p.80–81'],
     level: 3,
@@ -664,8 +687,9 @@ export const SCENARIOS = [
   },
   {
     id: 'pnr_tag_commit',
+    evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft', // draft → coach_1 → approved（3 位教練一致）
-    sources: ['ASEP p.126、p.134', 'NBA Coaches Playbook p.257、p.81 圖 5.14'],
+    sources: ['ASEP p.126、p.134'],
     level: 3,
     play: '高位擋拆',
     name: '弱側內縮（Tag）真補位',
@@ -685,6 +709,7 @@ export const SCENARIOS = [
   },
   {
     id: 'pnr_switch',
+    evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft', // draft → coach_1 → approved（3 位教練一致）
     sources: ['ASEP p.147–148、p.200–201', 'NBA Coaches Playbook p.257'],
     level: 3,
@@ -706,8 +731,9 @@ export const SCENARIOS = [
   // ---------- Level 3：側翼擋拆 vs 封底線（scenario_bank_v2 D1） ----------
   {
     id: 'pnr_ice_pop',
+    evidence: 'medium', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
-    sources: ['NBA Coaches Playbook p.258 圖 16.4、p.60 圖 4.26', 'thehoopsgeek.com/basketball-plays/pick-roll-against-ice-defense'],
+    sources: ['NBA Coaches Playbook p.258 圖 16.4、16.6–16.7', 'thehoopsgeek.com/basketball-plays/pick-roll-against-ice-defense', '[外彈跳投為推論]'],
     level: 3,
     play: '側翼擋拆',
     name: '側翼擋拆 vs 封底線（Ice）：掩護者外彈',
@@ -733,8 +759,9 @@ export const SCENARIOS = [
   // ---------- Level 4：假動作辨識 ----------
   {
     id: 'pnr_tag_stunt',
+    evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft', // draft → coach_1 → approved（3 位教練一致）
-    sources: ['ASEP p.126、p.132', 'NBA Coaches Playbook p.256'],
+    sources: ['ASEP p.126、p.132'],
     level: 4,
     play: '高位擋拆',
     name: '弱側假撲（Stunt）',

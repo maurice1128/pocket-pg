@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0531';
+import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0600';
 
 // ---------- 設定 ----------
 // levels：該難度會出的題目等級（初階 → 進階的分級課程）
@@ -329,7 +329,8 @@ function decide(rawAction, eventTime) {
   let grade;
   if (action === 'timeout') grade = 'late';
   else if (rt < 0) grade = 'early';
-  else if (action === rep.sc.answer) grade = 'correct';
+  // 書上常並列多個最佳選項：answer 加上 alsoBest 都給 2 分
+  else if (action === rep.sc.answer || (rep.sc.alsoBest || []).includes(action)) grade = 'correct';
   else if (rep.sc.partial.includes(action)) grade = 'partial';
   else grade = 'wrong';
   const decisionMs = action === 'timeout' || rt < 0 ? null : Math.max(0, Math.round((rt - store.baseline) / 10) * 10);
@@ -347,10 +348,14 @@ function decide(rawAction, eventTime) {
     passAnim = { from: ball.position.clone(), target, t: 0 };
   } else if (action === 'shoot') {
     passAnim = { from: ball.position.clone(), target: null, t: 0 };
-  } else if (action === 'drive') {
-    passAnim = { from: ball.position.clone(), target: null, t: 0, kind: 'drive' };
-  } else if (action === 'reset') {
-    passAnim = { from: ball.position.clone(), target: null, t: 0, kind: 'reset' };
+  } else if (action === 'drive' || action === 'reset') {
+    // 切入：你帶球往籃框衝 2.5 m；轉移球（往下滑）：你運球往後撤 1.5 m。球留在手上，鏡頭跟著人走
+    const pg = players.PG.pos.clone();
+    const dir = new THREE.Vector3(BASKET.x - pg.x, 0, BASKET.z - pg.z).normalize();
+    const end = pg.clone().addScaledVector(dir, action === 'drive' ? 2.5 : -1.5);
+    const t0 = simT;
+    players.PG.path = [[t0, pg.x, pg.z], [t0 + (action === 'drive' ? 0.7 : 0.6), end.x, end.z]];
+    rep.tEnd = Math.max(rep.tEnd, t0 + 0.8);
   }
   state = 'resolve';
   // 回合中判斷正確：簡短提示後直接進下一個決策點；錯了或回合最後一步才顯示結果卡
@@ -379,9 +384,12 @@ function showResult() {
   $('res-title').className = cls;
   const yours = d.action === 'timeout' ? '沒有出手' : actionLabel(sc, d.action);
   $('res-time').textContent = d.decisionMs != null ? `你的選擇：${yours}　決策時間 ${d.decisionMs} ms` : `你的選擇：${yours}`;
-  $('res-coverage').textContent = `${sc.name} → 最佳：${actionLabel(sc, sc.answer)}`;
+  const bests = [sc.answer, ...(sc.alsoBest || [])].map((a) => actionLabel(sc, a)).join('、');
+  const oks = (sc.partial || []).map((a) => actionLabel(sc, a)).join('、');
+  $('res-coverage').textContent = `${sc.name} → 最佳：${bests}` + (oks ? `；可接受：${oks}` : '');
   $('res-explain').textContent = sc.explain;
-  const review = sc.status === 'approved' ? '已通過教練審核' : '答案初版：已對照教科書，待教練審核';
+  const strength = { strong: '強', medium: '中', weak: '弱，需教練確認' }[sc.evidence] || '未評';
+  const review = (sc.status === 'approved' ? '已通過教練審核' : '答案初版，待教練審核') + `；書面依據強度：${strength}`;
   $('res-mistake').textContent = (d.grade === 'correct' ? '' : `常見錯誤：${sc.mistake}　`) + `（${review}；依據：${sc.sources.join('；')}）`;
   for (const [k, p] of Object.entries(players)) { p.root.visible = inPlay(k); p.ring.visible = false; }
   for (const r of sc.cueRoles) players[r].ring.visible = true;
