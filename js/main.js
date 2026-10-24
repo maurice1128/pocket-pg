@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0810';
+import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0815';
 
 // ---------- 設定 ----------
 // levels：該難度會出的題目等級（初階 → 進階的分級課程）
@@ -220,6 +220,10 @@ window.__pp = {
     state = 'home';
     return worst;
   },
+  // 快轉遊戲 sec 秒（背景分頁 requestAnimationFrame 不跑時測試用）；act(動作) 以目前遊戲時間作答
+  advance(sec, fps = 30) { for (let i = 0; i < sec * fps; i++) { clockOffset += 1000 / fps; step(performance.now()); } return { state, sc: rep && rep.sc.id }; },
+  act(action) { decide(action, clock()); },
+  get since() { return rep ? simT - rep.onset : null; },
   // 走位紀錄：每 dt 秒記下指定角色的位置（相對 onset 的時間），檢查掩護有沒有碰到人
   trace(id, roles = ['PG', 'O5', 'X1', 'X5'], dt = 0.15) {
     this.play(id);
@@ -290,8 +294,11 @@ function buildRep(sc, opts = {}) {
   const off = Object.assign({}, DEFAULT_OFFENSE, sc.offense);
   // 教練回饋 #1-2：你（PG）只在戰術前段被帶著走，到決策點（onset 後 0.3 秒內）停下原地運球；之後只有按「切」才會動
   const stopT = sc.pgStop ?? 0.3;
-  const pgStopPos = samplePath(off.PG, stopT, new THREE.Vector3());
-  off.PG = [...off.PG.filter(([tt]) => tt < stopT), [stopT, pgStopPos.x, pgStopPos.z]];
+  // 停點在路線結束之後（自動段落 pgStop: 99）就不加影格，否則題目長度會被拉到 99 秒
+  if (stopT < off.PG[off.PG.length - 1][0]) {
+    const pgStopPos = samplePath(off.PG, stopT, new THREE.Vector3());
+    off.PG = [...off.PG.filter(([tt]) => tt < stopT), [stopT, pgStopPos.x, pgStopPos.z]];
+  }
   const def = Object.assign({}, DEFAULT_DEFENSE, sc.defense);
   // X3 開場位置在協防點與底角之間隨機（避免看站位就猜題），位移隨時間淡出，終點維持原設計
   const x3Shift = sc.fixedX3 ? 0 : rand(-0.2, 1.6);
@@ -327,6 +334,9 @@ let rep = null;          // 目前題目
 let session = null;      // 本次訓練
 let simT = 0;            // 情境時間
 let repStartPerf = 0;
+// 測試用時鐘偏移：__pp.advance() 在背景分頁（畫面不更新）也能快轉遊戲
+let clockOffset = 0;
+const clock = () => performance.now() + clockOffset;
 let decision = null;
 let passAnim = null;
 let overhead = false;
@@ -345,7 +355,7 @@ function startSession() {
   if (!store.baseline) { startCalibration(true); return; }
   // 出題單位＝單題或「回合」（多個決策點串起來）。依難度挑等級；每個單位至少出現一次，其餘隨機
   // 3v3 教學模式沒有 O2／O4，用到他們的題目先不出
-  const needsExtra = (s) => [s.answer, ...(s.partial || []), ...(s.resetTargets || []).map((r) => 'pass:' + r)]
+  const needsExtra = (s) => s.needs5 || [s.answer, ...(s.partial || []), ...(s.resetTargets || []).map((r) => 'pass:' + r)]
     .some((a) => a === 'pass:O2' || a === 'pass:O4');
   const topic = TOPICS.find((tp) => tp.id === (store.topic || 'all')) || TOPICS[0];
   // 回合（POSSESSIONS）用 topic 欄位分類；單題用主題的 match 規則
@@ -358,6 +368,10 @@ function startSession() {
     .map((s) => s.id);
   // 選了主題但這個難度沒有題目：放寬等級限制
   if (!ids.length) ids.push(...[...SCENARIOS, ...POSSESSIONS].filter((s) => inTopic(s) && !s.chainOnly && s.evidence !== 'weak').map((s) => s.id));
+  if (!ids.length) { // 首頁看不到 toast，直接寫在開始鈕上
+    const btn = $('btn-start'), label = btn.textContent;
+    btn.textContent = '這個主題還沒有題目'; setTimeout(() => { btn.textContent = label; }, 1500); return;
+  }
   const order = [...ids].sort(() => Math.random() - 0.5).slice(0, REPS_PER_SESSION);
   while (order.length < REPS_PER_SESSION) order.push(ids[Math.floor(Math.random() * ids.length)]);
   order.sort(() => Math.random() - 0.5);
@@ -384,7 +398,7 @@ function nextRep() {
   if (poss && session.s === 0) session.mirror = rep.mirror;
   decision = null; passAnim = null; overhead = false; snapCamera = !cont;
   simT = rep.tStart - rep.intro;
-  repStartPerf = performance.now();
+  repStartPerf = clock();
   for (const [k, p] of Object.entries(players)) {
     p.path = rep.paths[k];
     if (!cont) samplePath(p.path, rep.tStart, p.pos);
@@ -965,16 +979,23 @@ addEventListener('resize', resize);
 resize();
 
 function frame(now) {
+  step(now);
+  requestAnimationFrame(frame);
+}
+function step(now) {
+  now += clockOffset;
   const dt = Math.min(0.05, (now - lastFrame) / 1000);
   lastFrame = now;
   if (rep && (state === 'play' || state === 'resolve' || state === 'result')) {
     if (state === 'play') {
+      const r0 = rep; // 自動段落播完會在這一格換成下一步；換了就不要用舊的時間判斷新一步（否則新一步一開始就被判太慢）
       simT = rep.tStart - rep.intro + (now - repStartPerf) / 1000 * cfg().timeScale;
       const t = Math.max(simT, rep.tStart);
       updatePlayers(dt * cfg().timeScale, t);
       // 時間條與逾時
       const win = cfg().window * (PRESSURE[rep.sc.pressure] || 1);
       const since = simT - rep.onset;
+      $('hud').classList.toggle('waiting', !!rep.sc.auto); // 自動段落按鈕變淡（不能操作）
       if (rep.sc.auto) {
         // 自動段落：隊友處理球、防守輪轉；你看著、跟著跑位，結束後自動進入下一個決策點
         $('phase').textContent = rep.sc.autoText || '隊友處理球…';
@@ -984,7 +1005,7 @@ function frame(now) {
       $('phase').textContent = phaseText(rep.sc);
       $('phase').classList.toggle('hidden', since >= 0);
       }
-      if (!rep.sc.auto && since >= 0) {
+      if (rep === r0 && !rep.sc.auto && since >= 0) {
         $('timer').classList.add('live');
         $('timer-fill').style.transform = `scaleX(${Math.max(0, 1 - since / win)})`;
         if (cfg().hintRing) for (const r of rep.sc.cueRoles) players[r].ring.visible = since < 0.6;
@@ -1022,7 +1043,6 @@ function frame(now) {
     camPos.copy(camera.position);
   }
   renderer.render(scene, camera);
-  requestAnimationFrame(frame);
 }
 
 // 首頁背景擺位
