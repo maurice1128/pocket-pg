@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0809';
+import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0810';
 
 // ---------- 設定 ----------
 // levels：該難度會出的題目等級（初階 → 進階的分級課程）
@@ -133,10 +133,12 @@ function makePlayer(color, defender) {
   // 雙腳
   const footGeo = new THREE.BoxGeometry(0.12, 0.08, 0.26);
   const spread = defender ? 0.3 : 0.16;
+  const parts = [body, head, nose];
   for (const s of [-1, 1]) {
     const f = new THREE.Mesh(footGeo, mat(0x22252b));
     f.position.set(s * spread, 0.04, 0.04);
     yaw.add(f);
+    parts.push(f);
   }
   // 重心投影點（不跟著傾斜，留在地上）
   const com = new THREE.Mesh(new THREE.CircleGeometry(0.13, 12), new THREE.MeshBasicMaterial({ color: 0x111111, transparent: true, opacity: 0.55 }));
@@ -158,7 +160,7 @@ function makePlayer(color, defender) {
   scene.add(root);
   const fadeMats = [body.material, head.material, nose.material];
   for (const m of fadeMats) m.transparent = true;
-  return { root, tilt, yaw, com, ring, aim, fadeMats, pos: new THREE.Vector3(), vel: new THREE.Vector3(), acc: new THREE.Vector3(), path: null, defender, faceMode: 'ball', heading: 0 };
+  return { root, tilt, yaw, com, ring, aim, fadeMats, parts, color, body: null, pos: new THREE.Vector3(), vel: new THREE.Vector3(), acc: new THREE.Vector3(), path: null, defender, faceMode: 'ball', heading: 0 };
 }
 
 // 5v5：PG＝持球的你；O2 強側、O3 弱側底角、O4 弱側側翼、O5 掩護者／大個子；X 是各自的防守者
@@ -169,6 +171,22 @@ const players = {};
 for (const r of OFFENSE) players[r] = makePlayer(r === 'PG' ? COLORS.pg : COLORS.offense, false);
 for (const r of DEFENSE) players[r] = makePlayer(COLORS.defense, true);
 const inPlay = (r) => store.players5 !== false || !EXTRA_ROLES.includes(r);
+// 真人身體外掛（本機版）：?body=1 開啟、?body=0 關閉（記在這支手機）。外掛檔（SMPL-X）因授權只放在本機伺服器的 /body/，
+// 公開網站沒有這個檔，就維持膠囊人
+{
+  const q = new URLSearchParams(location.search).get('body');
+  try { if (q === '1' || q === '0') localStorage.setItem('pp_body', q); } catch { /* 忽略 */ }
+  let on = q === '1';
+  try { on = on || (q !== '0' && localStorage.getItem('pp_body') === '1'); } catch { /* 忽略 */ }
+  if (on) {
+    import('../body/smplx_body.js').then((m) => m.init()).then((plugin) => {
+      for (const [r, p] of Object.entries(players)) {
+        p.body = plugin.attach(p, r, p.color);
+        for (const m of p.parts) m.visible = false;
+      }
+    }).catch((e) => console.warn('真人身體外掛載入失敗，維持膠囊人', e));
+  }
+}
 // 除錯用：__pp.play('題目id') 直接播放某一題
 window.__pp = {
   players, camera, get rep() { return rep; }, get state() { return state; },
@@ -744,6 +762,7 @@ function updatePlayers(dt, t) {
     else target = p !== players.PG ? Math.atan2(players.PG.pos.x - p.pos.x, players.PG.pos.z - p.pos.z) : p.heading; // 站定的隊友面向球
     p.heading += angDiff(target, p.heading) * (1 - Math.exp(-8 * dt));
     p.yaw.rotation.y = p.heading;
+    if (p.body && dt > 0 && p.root.visible) p.body.update(dt, p.vel, p.acc, p.heading);
     // 傾斜：重心往加速方向偏
     const lean = p.acc.clone().multiplyScalar(0.035).add(p.vel.clone().multiplyScalar(0.03));
     lean.y = 0;
@@ -903,7 +922,8 @@ function fadeNearPlayers() {
   const fp = firstPerson();
   for (const p of Object.values(players)) {
     const d = fp ? camera.position.distanceTo(tmp.copy(p.pos).setY(1.2)) : 99;
-    const op = Math.min(1, Math.max(0.28, (d - 0.7) / 0.9));
+    // 真人身體貼近時半透明會看到重疊的內面，淡得更多
+    const op = Math.min(1, Math.max(p.body ? 0.12 : 0.28, (d - 0.7) / 0.9));
     for (const m of p.fadeMats) { m.opacity = op; m.depthWrite = op > 0.99; }
   }
 }
