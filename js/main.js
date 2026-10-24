@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0803';
+import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0805';
 
 // ---------- 設定 ----------
 // levels：該難度會出的題目等級（初階 → 進階的分級課程）
@@ -583,6 +583,32 @@ canvas.addEventListener('pointermove', (e) => {
   const a = state === 'play' ? classifySwipe(compensateStartX(gesture.x, gesture), gesture.y, e.clientX, e.clientY) : null;
   showAim(a && a.startsWith('pass:') ? a.slice(5) : null);
 });
+// 畫面外的隊友：在螢幕左右邊緣顯示藍色箭頭（直拿畫面窄，底角、弱側側翼常在畫面外），往箭頭滑就傳給他
+const edgeMarks = {};
+for (const k of ['O2', 'O3', 'O4', 'O5']) {
+  const el = document.createElement('div');
+  el.className = 'edge-mark hidden';
+  $('hud').appendChild(el);
+  edgeMarks[k] = el;
+}
+function updateEdgeMarks() {
+  const live = state === 'play' && firstPerson() && !overhead;
+  for (const [k, el] of Object.entries(edgeMarks)) {
+    let show = false;
+    if (live && inPlay(k)) {
+      const s = toScreen(players[k].pos, 1.0);
+      const off = s.behind || s.x < 0 || s.x > innerWidth;
+      if (off) {
+        const right = s.behind ? s.side > 0 : s.x > innerWidth;
+        el.classList.toggle('right', right);
+        el.style.top = (s.behind ? innerHeight * 0.42 : Math.min(innerHeight * 0.7, Math.max(innerHeight * 0.2, s.y))) + 'px';
+        el.classList.toggle('aim', players[k].aim.visible);
+        show = true;
+      }
+    }
+    el.classList.toggle('hidden', !show);
+  }
+}
 function showAim(role) { for (const [k, p] of Object.entries(players)) p.aim.visible = k === role; }
 canvas.addEventListener('pointercancel', () => { showAim(null); if (gesture) clearTimeout(gesture.longTimer); gesture = null; });
 canvas.addEventListener('pointerup', (e) => {
@@ -850,15 +876,20 @@ function resize() {
   const portrait = w < h;
   renderer.setSize(w, h, false);
   const playing = state === 'play' || state === 'result';
-  $('fp-rotate').textContent = gyro.enabled ? '轉動手機看弱側底角' : '橫向拿手機，才看得到弱側底角';
-  $('fp-rotate').classList.toggle('hidden', !(firstPerson() && playing && (portrait || gyro.enabled)));
+  // 直拿是主要拿法（使用者：「手機橫拿很奇怪」），不再提示橫拿；只有轉頭模式提示轉手機看弱側
+  $('fp-rotate').textContent = '轉動手機看弱側底角';
+  $('fp-rotate').classList.toggle('hidden', !(firstPerson() && playing && gyro.enabled));
   if (firstPerson()) {
-    // 第一人稱要看到順下和弱側底角：水平視角約 95°（橫向）；直向畫面太窄，只能 80° 並提示橫拿
+    // 第一人稱要看到順下和弱側底角：水平視角橫拿約 95°、直拿 85°
     // 轉頭模式下視野收窄到接近人眼的有效視野，弱側要自己轉過去看
-    camera.clearViewOffset();
-    camera.aspect = w / h;
-    const hFov = (gyro.enabled ? (portrait ? 60 : 75) : (portrait ? 80 : 95)) * Math.PI / 180;
-    camera.fov = Math.min(2 * Math.atan(Math.tan(hFov / 2) / camera.aspect) * 180 / Math.PI, 125);
+    // 直拿：用較高的虛擬畫面再裁掉上方（天花板），視線中心落在畫面上方約 1/3，
+    // 球場佔滿螢幕、球員仍然直立（不用把鏡頭往下俯，否則畫面邊緣的人會歪，看不準重心）
+    const fullH = portrait ? h * 1.3 : h;
+    camera.aspect = w / fullH;
+    const hFov = (gyro.enabled ? (portrait ? 65 : 75) : (portrait ? 85 : 95)) * Math.PI / 180;
+    camera.fov = Math.min(2 * Math.atan(Math.tan(hFov / 2) / camera.aspect) * 180 / Math.PI, 140);
+    if (portrait) camera.setViewOffset(w, fullH, 0, fullH - h, w, h);
+    else camera.clearViewOffset();
     camera.updateProjectionMatrix();
     return;
   }
@@ -918,6 +949,7 @@ function frame(now) {
     }
     updateCamera(dt);
     fadeNearPlayers();
+    updateEdgeMarks();
     // 動態瞄準：手指按著時，每一格都用最新的隊友位置與手機轉動重算誰會接球（不只在手指移動時）
     if (state === 'play' && gesture && gesture.lastX != null && Math.hypot(gesture.lastX - gesture.x, gesture.lastY - gesture.y) >= SWIPE_MIN) {
       const a = classifySwipe(compensateStartX(gesture.x, gesture), gesture.y, gesture.lastX, gesture.lastY);

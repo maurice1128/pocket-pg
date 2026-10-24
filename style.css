@@ -21,6 +21,9 @@ html, body, #view, #hud { -webkit-user-select: none; user-select: none; -webkit-
 .screen { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
   padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); background: var(--bg); overflow-y: auto; }
 .screen.overlay { background: rgba(10, 11, 14, 0.35); align-items: flex-end; }
+/* 內容比畫面高時（橫拿首頁）用 margin:auto 置中，上方才不會被切掉、捲不到 */
+.screen:not(.overlay) { align-items: flex-start; }
+.screen:not(.overlay) > .card { margin: auto; }
 .card { width: 100%; max-width: 440px; background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 20px; }
 h1 { margin: 0; font-size: 30px; letter-spacing: 2px; }
 h2 { margin: 0 0 8px; font-size: 22px; }
@@ -105,3 +108,12 @@ button.primary { background: var(--accent); color: #111; border-color: var(--acc
 #btn-why { width: auto; display: inline-block; padding: 6px 12px; font-size: 13px; margin: 4px 0 0; }
 
 #topic { flex: 1; min-width: 0; padding: 9px 10px; font-size: 15px; font-family: inherit; color: var(--text); background: #22262e; border: 1px solid var(--line); border-radius: 10px; }
+/* 直拿畫面窄：提示字放在按鈕上方，避免重疊；按鈕關掉時回到最下面 */
+@media (orientation: portrait) { #hud-hint { bottom: max(118px, calc(env(safe-area-inset-bottom) + 108px)); } }
+#hud:has(#actions.hidden) #hud-hint { bottom: max(36px, calc(env(safe-area-inset-bottom) + 26px)); }
+/* 畫面外隊友的邊緣箭頭 */
+.edge-mark { position: absolute; left: 4px; width: 0; height: 0; margin-top: -14px; border-top: 14px solid transparent; border-bottom: 14px solid transparent;
+  border-right: 18px solid #2f6fd6; filter: drop-shadow(0 1px 2px #000); opacity: 0.9; }
+.edge-mark.right { left: auto; right: 4px; border-right: 0; border-left: 18px solid #2f6fd6; }
+.edge-mark.aim { border-right-color: #fff; }
+.edge-mark.right.aim { border-left-color: #fff; }
