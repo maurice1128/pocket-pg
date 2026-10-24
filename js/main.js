@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0805';
+import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0806';
 
 // ---------- 設定 ----------
 // levels：該難度會出的題目等級（初階 → 進階的分級課程）
@@ -201,6 +201,23 @@ window.__pp = {
     }
     state = 'home';
     return worst;
+  },
+  // 走位紀錄：每 dt 秒記下指定角色的位置（相對 onset 的時間），檢查掩護有沒有碰到人
+  trace(id, roles = ['PG', 'O5', 'X1', 'X5'], dt = 0.15) {
+    this.play(id);
+    const out = [];
+    let next = rep.tStart;
+    for (let t = rep.tStart; t <= rep.tEnd + 0.4; t += 1 / 60) {
+      updatePlayers(1 / 60, t);
+      if (t >= next) {
+        next += dt;
+        const row = { t: +(t - rep.onset).toFixed(2), m: rep.mirror };
+        for (const r of roles) row[r] = [+players[r].pos.x.toFixed(2), +players[r].pos.z.toFixed(2)];
+        out.push(row);
+      }
+    }
+    state = 'home';
+    return out;
   },
 };
 
