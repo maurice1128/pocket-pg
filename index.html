@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="theme-color" content="#14161a">
 <title>口袋控衛 Pocket PG</title>
-<link rel="stylesheet" href="style.css?v=0802">
+<link rel="stylesheet" href="style.css?v=0803">
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
 </script>
@@ -67,6 +67,11 @@
       <label for="occl">遮蔽模式</label>
       <input type="checkbox" id="occl">
       <span class="note">防守者動作後畫面會隱藏防守者</span>
+    </div>
+    <div class="row">
+      <label for="showbtns">顯示按鈕</label>
+      <input type="checkbox" id="showbtns">
+      <span class="note">關掉也能用手勢：按一下＝投、長按＝切</span>
     </div>
     <div class="row"><label>反應基準</label><span id="base-label">尚未校準</span></div>
     <button class="primary" id="btn-start">開始訓練（10 題）</button>
@@ -133,6 +138,6 @@
   </div>
 </section>
 
-<script type="module" src="js/main.js?v=0802"></script>
+<script type="module" src="js/main.js?v=0803"></script>
 </body>
 </html>

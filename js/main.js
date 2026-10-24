@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0802';
+import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0803';
 
 // ---------- 設定 ----------
 // levels：該難度會出的題目等級（初階 → 進階的分級課程）
@@ -35,7 +35,7 @@ const COLORS = { court: 0xd9b382, paint: 0xc99a66, line: 0xffffff, offense: 0x2f
 const STORE_KEY = 'pocketpg.v1';
 function load() { try { return JSON.parse(localStorage.getItem(STORE_KEY)) || {}; } catch { return {}; } }
 function save(data) { try { localStorage.setItem(STORE_KEY, JSON.stringify(data)); } catch { /* 忽略 */ } }
-const store = Object.assign({ baseline: null, difficulty: 'normal', occlusion: false, view: 'fp', history: [] }, load());
+const store = Object.assign({ baseline: null, difficulty: 'normal', occlusion: false, view: 'fp', showButtons: true, history: [] }, load());
 
 // ---------- Three.js 場景 ----------
 const canvas = document.getElementById('view');
@@ -951,6 +951,8 @@ function refreshHome() {
   for (const b of $('diff').children) b.classList.toggle('on', b.dataset.v === store.difficulty);
   for (const b of $('viewmode').children) b.classList.toggle('on', b.dataset.v === store.view);
   $('occl').checked = !!store.occlusion;
+  $('showbtns').checked = store.showButtons !== false;
+  $('actions').classList.toggle('hidden', store.showButtons === false);
   $('gyro').checked = !!store.gyro;
   for (const b of $('teamsize').children) b.classList.toggle('on', b.dataset.v === (store.players5 !== false ? '5' : '3'));
   $('base-label').textContent = store.baseline ? `${store.baseline} ms（這支手機）` : '尚未校準（第一次開始會先校準）';
@@ -971,6 +973,8 @@ $('viewmode').addEventListener('click', (e) => {
   store.view = v; save(store); refreshHome(); resize();
 });
 $('occl').addEventListener('change', (e) => { store.occlusion = e.target.checked; save(store); });
+// 熟手勢的人可以關掉按鈕；手勢（按一下＝投、長按＝切）不管開關都能用
+$('showbtns').addEventListener('change', (e) => { store.showButtons = e.target.checked; save(store); $('actions').classList.toggle('hidden', !e.target.checked); });
 $('gyro').addEventListener('change', async (e) => {
   // iPhone 要在點擊當下請求權限
   if (e.target.checked && !(await enableGyro())) {
