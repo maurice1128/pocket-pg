@@ -485,16 +485,24 @@ canvas.addEventListener('pointerup', (e) => {
     // 依螢幕上的方向，找最接近的隊友（第一人稱時從畫面下方的球出發）
     const from = firstPerson() ? { x: innerWidth / 2, y: innerHeight * 0.95 } : toScreen(players.PG.pos, 1.0);
     const sw = Math.atan2(dy, dx);
-    let best = null, bestDiff = Infinity;
+    let best = null, bestDiff = Infinity, onTarget = null, onDist = Math.max(60, innerWidth * 0.08);
     for (const key of OFFENSE) {
       if (key === 'PG' || !inPlay(key)) continue;
       const to = toScreen(players[key].pos, 1.0);
       if (to.behind) continue; // 鏡頭後方的隊友不列入
       const diff = Math.abs(angDiff(Math.atan2(to.y - from.y, to.x - from.x), sw));
       if (diff < bestDiff) { bestDiff = diff; best = 'pass:' + key; }
+      // 手指放開的位置落在隊友身上（含上半身）＝明確要傳給他
+      const body = toScreen(players[key].pos, 1.2);
+      const dEnd = Math.hypot(e.clientX - body.x, e.clientY - body.y);
+      if (dEnd < onDist) { onDist = dEnd; onTarget = 'pass:' + key; }
     }
-    const up = dy < 0 && Math.abs(dy) > Math.abs(dx) * 1.2;
-    action = up && (!best || bestDiff > 0.45) ? 'drive' : (best || 'drive');
+    const fromVertical = Math.abs(Math.atan2(dx, -dy)); // 0＝正上方
+    // 優先順序：滑到隊友身上 → 傳；往正上方（±17°）→ 切入；偏上但前方沒有隊友 → 切入；其他 → 傳給方向最近的隊友
+    if (onTarget) action = onTarget;
+    else if (dy < 0 && fromVertical < 0.3) action = 'drive';
+    else if (dy < 0 && fromVertical < 0.6 && (!best || bestDiff > 0.45)) action = 'drive';
+    else action = best || 'drive';
   }
   const t0 = gesture.t;  // 以手指按下的時間計算反應時間
   gesture = null;
