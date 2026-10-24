@@ -14,6 +14,8 @@
 html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); overflow: hidden;
   font-family: "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif; }
 #view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+/* 擋掉手機長按的選取文字與選單，否則長按切入會被瀏覽器取消 */
+html, body, #view, #hud { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
 .hidden { display: none !important; }
 
 .screen { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;

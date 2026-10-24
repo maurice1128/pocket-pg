@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js';
+import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0531';
 
 // ---------- 設定 ----------
 // levels：該難度會出的題目等級（初階 → 進階的分級課程）
@@ -469,23 +469,32 @@ $('calib-pad').addEventListener('pointerdown', (e) => {
 let gesture = null;
 const SWIPE_MIN = 14;   // 滑動超過幾像素才算滑（越小越敏感）
 const HOLD_MS = 350;   // 按住不動超過這個時間＝長按切入（決策時間仍以按下那一刻計算）
+const HOLD_SLOP = 26;  // 長按時手指自然晃動的容許範圍（像素）
+// 手機長按時，瀏覽器會想跳出選單／選取文字並取消觸控，要先擋掉
+canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+canvas.addEventListener('touchstart', (e) => { if (state === 'play') e.preventDefault(); }, { passive: false });
+canvas.addEventListener('touchmove', (e) => { if (state === 'play') e.preventDefault(); }, { passive: false });
 canvas.addEventListener('pointerdown', (e) => {
   if (state !== 'play') { gesture = null; return; }
   const g = gesture = { x: e.clientX, y: e.clientY, t: e.timeStamp, id: e.pointerId, rep, moved: false };
   g.timer = setTimeout(() => {
-    if (gesture !== g || g.moved || state !== 'play' || g.rep !== rep) return;
+    if (gesture !== g || g.held || state !== 'play' || g.rep !== rep) return;
+    if (Math.hypot(g.lastX - g.x, g.lastY - g.y) > HOLD_SLOP) return; // 手指已經在滑，不算長按
     gesture = null;
+    toast('切入！');
     decide('drive', g.t);
   }, HOLD_MS);
+  g.lastX = e.clientX; g.lastY = e.clientY;
   try { canvas.setPointerCapture(e.pointerId); } catch { /* 忽略 */ }
 });
 canvas.addEventListener('pointermove', (e) => {
-  if (gesture && e.pointerId === gesture.id && Math.hypot(e.clientX - gesture.x, e.clientY - gesture.y) >= SWIPE_MIN) gesture.moved = true;
+  if (gesture && e.pointerId === gesture.id) { gesture.lastX = e.clientX; gesture.lastY = e.clientY; }
 });
-canvas.addEventListener('pointercancel', () => { if (gesture) clearTimeout(gesture.timer); gesture = null; });
+// 被瀏覽器取消時：如果手指幾乎沒動，計時器照樣可以判長按；只清掉「放開」要用的資料
+canvas.addEventListener('pointercancel', () => { if (gesture) gesture.cancelled = true; });
 canvas.addEventListener('pointerup', (e) => {
   if (gesture) clearTimeout(gesture.timer);
-  if (state !== 'play' || !gesture || e.pointerId !== gesture.id || gesture.rep !== rep) { gesture = null; return; }
+  if (state !== 'play' || !gesture || e.pointerId !== gesture.id || gesture.rep !== rep || gesture.cancelled) { gesture = null; return; }
   const dx = e.clientX - gesture.x, dy = e.clientY - gesture.y;
   const dist = Math.hypot(dx, dy);
   let action;
