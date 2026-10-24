@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0806';
+import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0809';
 
 // ---------- 設定 ----------
 // levels：該難度會出的題目等級（初階 → 進階的分級課程）
@@ -867,16 +867,36 @@ addEventListener('deviceorientation', (e) => {
   // 放大 1.5 倍：手機轉 40°，視線轉 60°，不用大幅轉身（上限 ±110°）
   gyro.yaw = Math.max(-1.92, Math.min(1.92, GYRO_GAIN * angDiff(e.alpha * Math.PI / 180, gyro.zero * Math.PI / 180)));
 });
+// 回傳 'ok' 或失敗原因，首頁顯示對應的解法（使用者：「沒有取得陀螺儀的權限」）
 async function enableGyro() {
-  try {
-    if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
-      if (await DeviceOrientationEvent.requestPermission() !== 'granted') return false;
-    }
-  } catch { return false; }
+  if (window.top !== window) return 'iframe';          // Claude 連結（內嵌框架）不給感測器
+  if (!window.isSecureContext) return 'insecure';
+  if (typeof DeviceOrientationEvent === 'undefined') return 'unsupported';
+  // iPhone／iPad 一直都要請求權限；新版 Chrome（含 Android）也有 requestPermission，被網站設定擋住時回 denied
+  if (typeof DeviceOrientationEvent.requestPermission === 'function') {
+    const inApp = /Line\/|FBAN|FBAV|Instagram|MicroMessenger/i.test(navigator.userAgent);
+    try {
+      if (await DeviceOrientationEvent.requestPermission() !== 'granted') {
+        // 非 iPhone：有些 Chrome 回 denied 但感測器事件其實照樣會來，等 0.8 秒看看有沒有資料
+        if (!IS_IOS && await new Promise((res) => setTimeout(() => res(gyro.seen), 800))) { gyro.enabled = true; gyro.zero = null; return 'ok'; }
+        return inApp ? 'inapp' : IS_IOS ? 'denied' : 'denied_android';
+      }
+    } catch { return inApp ? 'inapp' : 'blocked'; }
+  }
   gyro.enabled = true;
   gyro.zero = null;
-  return true;
+  return 'ok';
 }
+const IS_IOS = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+const GYRO_FAIL = {
+  iframe: '這個連結不能用陀螺儀，請改開 maurice1128.github.io/pocket-pg',
+  insecure: '要用 https 網址開啟才能用陀螺儀',
+  unsupported: '這個瀏覽器不支援陀螺儀',
+  denied: '權限被拒絕：關掉這個分頁重開再試；還不行就到「設定 → Safari → 清除瀏覽紀錄和網站資料」',
+  denied_android: '權限被擋：點網址列左邊的圖示 →「網站設定」→「動作感應器」改成允許，重新整理再勾一次',
+  inapp: 'LINE／IG 等 App 內建瀏覽器不給權限，請按右上角用 Safari 開啟',
+  blocked: '沒有跳出權限視窗：請直接用 Safari 開啟，再點一次這個勾選框',
+};
 
 // 第一人稱時，貼在面前的球員改成半透明，才看得到後面的防守變化（真實比賽可以從旁邊看過去）
 function fadeNearPlayers() {
@@ -1024,11 +1044,13 @@ $('viewmode').addEventListener('click', (e) => {
 $('occl').addEventListener('change', (e) => { store.occlusion = e.target.checked; save(store); });
 // 熟手勢的人可以關掉按鈕；手勢（按一下＝投、長按＝切）不管開關都能用
 $('showbtns').addEventListener('change', (e) => { store.showButtons = e.target.checked; save(store); $('actions').classList.toggle('hidden', !e.target.checked); });
-$('gyro').addEventListener('change', async (e) => {
-  // iPhone 要在點擊當下請求權限
-  if (e.target.checked && !(await enableGyro())) {
+// iPhone 要在「點擊」當下請求權限（change 事件在部分 iOS 版本不算使用者手勢，所以用 click）
+$('gyro').addEventListener('click', async (e) => {
+  const why = e.target.checked ? await enableGyro() : 'ok';
+  if (why !== 'ok') {
     e.target.checked = false;
-    $('gyro-note').textContent = '沒有取得陀螺儀權限';
+    gyro.enabled = false;
+    $('gyro-note').textContent = GYRO_FAIL[why];
   } else {
     gyro.enabled = e.target.checked;
     $('gyro-note').textContent = gyro.enabled ? '開始後轉動手機就能轉頭（建議關掉手機的自動旋轉）' : '拿手機轉動，畫面跟著轉';
@@ -1037,7 +1059,7 @@ $('gyro').addEventListener('change', async (e) => {
   store.gyro = gyro.enabled; save(store);
 });
 $('btn-start').addEventListener('click', async () => {
-  if (store.gyro && !gyro.enabled) await enableGyro();
+  if (store.gyro && !gyro.enabled && await enableGyro() !== 'ok') { store.gyro = false; save(store); refreshHome(); }
   startSession();
 });
 $('btn-calib').addEventListener('click', () => startCalibration(false));
