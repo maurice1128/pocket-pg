@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0603';
+import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0610';
 
 // ---------- 設定 ----------
 // levels：該難度會出的題目等級（初階 → 進階的分級課程）
@@ -13,7 +13,7 @@ const REPS_PER_SESSION = 10;
 const PRESSURE = { loose: 2.2, medium: 1.4, tight: 1.0 };
 const INTRO = 0.9;          // 每題開始前的停頓（秒）
 const OCCLUDE_AFTER = 0.25; // 遮蔽模式：onset 後多久隱藏防守者（情境可用 occludeAfter 覆寫）
-const BASE_LABELS = { drive: '切入攻擊（Drive）', reset: '轉移球／重新組織（Reset）' };
+const BASE_LABELS = { drive: '切入攻擊（Drive）', reset: '不攻擊、重新組織（Reset）', backout: '運球退出來（Back out）' };
 const actionLabel = (sc, a) => (sc.labels && sc.labels[a]) || ACTIONS[a] || BASE_LABELS[a] || a;
 const BASKET = new THREE.Vector3(0, 3.05, 1.575);
 const COLORS = { court: 0xd9b382, paint: 0xc99a66, line: 0xffffff, offense: 0x2f6fd6, pg: 0x1f4fa8, defense: 0xe5533d, ring: 0xffd23f, ball: 0xf07a22 };
@@ -157,6 +157,17 @@ window.__pp = {
   // 穿模檢查用：產生一題的路徑（含鏡像與微擾）
   buildRep: (id) => buildRep(SCENARIOS.find((s) => s.id === id)),
   MIN_SEP: () => MIN_SEP,
+  classify: (sx, sy, ex, ey) => classifySwipe(sx, sy, ex, ey),
+  // 除錯：把目前這題用引擎推進到 onset 之後 dt 秒，並把鏡頭放到位，回傳每位隊友在畫面上的位置
+  probe(id, dt = 0.3) {
+    this.play(id);
+    for (let t = rep.tStart; t <= rep.onset + dt; t += 1 / 60) updatePlayers(1 / 60, t);
+    snapCamera = true; updateCamera(1 / 60); camera.updateMatrixWorld();
+    const out = {};
+    for (const k of OFFENSE) if (k !== 'PG' && inPlay(k)) { const s = toScreen(players[k].pos, 1.0); out[k] = s.behind ? 'behind-' + (s.side > 0 ? 'right' : 'left') : [Math.round(s.x), Math.round(s.y)]; }
+    state = 'home';
+    return out;
+  },
   // 用真正的引擎把一題從頭跑到尾，回傳任兩名球員的最近距離（穿模檢查）
   simulate(id) {
     this.play(id);
@@ -313,7 +324,7 @@ function nextRep() {
   $('hud-play').textContent = poss ? poss.name : sc.play;
   if (gyro.enabled) gyro.zero = null; // 每題重新以當下手機方向為正前方
   $('hud-score').textContent = `正確 ${session.results.filter((r) => r.grade === 'correct').length}`;
-  $('timer').classList.remove('live');
+  $('timer').classList.remove('live', 'late');
   state = 'play';
   show('play');
 }
@@ -325,11 +336,16 @@ function decide(rawAction, eventTime) {
   if (state !== 'play' || decision) return;
   // 答案是「轉移球」的題目：往指定的安全接應者傳，也算轉移球
   const sc0 = rep.sc;
-  const action = sc0.answer === 'reset' && rawAction.startsWith('pass:') && (sc0.resetTargets || []).includes(rawAction.slice(5)) ? 'reset' : rawAction;
+  // 「不攻擊」有兩種做法：運球退出來（往下滑），或傳給題目指定的外圍安全接應者。兩者都算 reset
+  const safePass = rawAction.startsWith('pass:') && (sc0.resetTargets || []).includes(rawAction.slice(5));
+  const action = rawAction === 'backout' || (sc0.answer === 'reset' && safePass) ? 'reset' : rawAction;
   const onsetPerf = simToPerf(rep.onset);
   const rt = eventTime - onsetPerf;
   let grade;
-  if (action === 'timeout') grade = 'late';
+  // 時間到之後才出手：照樣做動作，但算太慢（用時間直接判斷，不靠畫面更新）
+  const winMs = cfg().window * (PRESSURE[rep.sc.pressure] || 1) / cfg().timeScale * 1000;
+  if (rt > winMs) rep.late = true;
+  if (action === 'timeout' || rep.late) grade = 'late';
   else if (rt < 0) grade = 'early';
   // 書上常並列多個最佳選項：answer 加上 alsoBest 都給 2 分
   else if (action === rep.sc.answer || (rep.sc.alsoBest || []).includes(action)) grade = 'correct';
@@ -347,16 +363,18 @@ function decide(rawAction, eventTime) {
   // 傳球動畫
   if (rawAction.startsWith('pass:')) {
     const target = players[rawAction.slice(5)];
-    passAnim = { from: ball.position.clone(), target, t: 0 };
+    // 太晚傳：球被最靠近接球者的防守者抄走
+    const thief = rep.late ? DEFENSE.filter(inPlay).map((k) => players[k]).sort((a, b) => a.pos.distanceTo(target.pos) - b.pos.distanceTo(target.pos))[0] : null;
+    passAnim = { from: ball.position.clone(), target: thief || target, t: 0 };
   } else if (action === 'shoot') {
-    passAnim = { from: ball.position.clone(), target: null, t: 0 };
-  } else if (action === 'drive' || action === 'reset') {
-    // 切入：你帶球往籃框衝 2.5 m；轉移球（往下滑）：你運球往後撤 1.5 m。球留在手上，鏡頭跟著人走
+    passAnim = { from: ball.position.clone(), target: null, t: 0, miss: !!rep.late };
+  } else if (rawAction === 'drive' || rawAction === 'backout') {
+    // 切入：帶球往籃框衝 2.5 m；退出來：運球往後撤 1.5 m。球留在手上，鏡頭跟著人走
     const pg = players.PG.pos.clone();
     const dir = new THREE.Vector3(BASKET.x - pg.x, 0, BASKET.z - pg.z).normalize();
-    const end = pg.clone().addScaledVector(dir, action === 'drive' ? 2.5 : -1.5);
+    const end = pg.clone().addScaledVector(dir, rawAction === 'drive' ? 2.5 : -1.5);
     const t0 = simT;
-    players.PG.path = [[t0, pg.x, pg.z], [t0 + (action === 'drive' ? 0.7 : 0.6), end.x, end.z]];
+    players.PG.path = [[t0, pg.x, pg.z], [t0 + (rawAction === 'drive' ? 0.7 : 0.6), end.x, end.z]];
     rep.tEnd = Math.max(rep.tEnd, t0 + 0.8);
   }
   state = 'resolve';
@@ -379,14 +397,19 @@ function showResult() {
   const d = decision, sc = rep.sc;
   const titles = {
     correct: ['正確判斷！', 'good'], partial: ['可以接受', 'ok'], wrong: ['判斷錯誤', 'bad'],
-    early: ['太早了：防守還沒動你就決定了', 'bad'], late: ['太慢了：機會已經消失', 'bad'],
+    early: ['太早了：防守還沒動你就決定了', 'bad'],
+    late: [d.action === 'timeout' ? '太慢了：沒有出手' : (d.rawAction || d.action).startsWith('pass:') ? '太慢了：傳球被抄走' : d.action === 'shoot' ? '太慢了：投籃被干擾，沒進' : '太慢了：防守已經補到位', 'bad'],
   };
   const [title, cls] = titles[d.grade];
   $('res-title').textContent = title;
   $('res-title').className = cls;
-  const yours = d.action === 'timeout' ? '沒有出手' : actionLabel(sc, d.action);
+  // 顯示玩家實際做的動作；傳給安全接應者時加註「轉移球」
+  const raw = d.rawAction || d.action;
+  const yours = d.action === 'timeout' ? '沒有出手' : actionLabel(sc, raw) + (raw.startsWith('pass:') && d.action === 'reset' ? '（轉移球）' : '');
   $('res-time').textContent = d.decisionMs != null ? `你的選擇：${yours}　決策時間 ${d.decisionMs} ms` : `你的選擇：${yours}`;
-  const bests = [sc.answer, ...(sc.alsoBest || [])].map((a) => actionLabel(sc, a)).join('、');
+  // 「不攻擊」的正解寫成具體做法：傳給哪個安全接應者，或運球退出來
+  const resetText = () => '不攻擊：' + [...(sc.resetTargets || []).map((r) => (ACTIONS['pass:' + r] || r) + '（轉移球）'), '運球退出來'].join('或');
+  const bests = [sc.answer, ...(sc.alsoBest || [])].map((a) => (a === 'reset' ? resetText() : actionLabel(sc, a))).join('、');
   const oks = (sc.partial || []).map((a) => actionLabel(sc, a)).join('、');
   $('res-coverage').textContent = `${sc.name} → 最佳：${bests}` + (oks ? `；可接受：${oks}` : '');
   $('res-explain').textContent = sc.explain;
@@ -505,40 +528,33 @@ canvas.addEventListener('pointercancel', () => { if (gesture) gesture.cancelled 
 canvas.addEventListener('pointerup', (e) => {
   if (gesture) clearTimeout(gesture.timer);
   if (state !== 'play' || !gesture || e.pointerId !== gesture.id || gesture.rep !== rep || gesture.cancelled) { gesture = null; return; }
-  const dx = e.clientX - gesture.x, dy = e.clientY - gesture.y;
-  const dist = Math.hypot(dx, dy);
-  let action;
-  // 點一下＝自己出手；長按或往正上方滑＝切入；往下滑＝轉移球；往隊友滑或滑到隊友身上＝傳球
-  if (dist < SWIPE_MIN) action = 'shoot';
-  else if (dy > 0 && Math.abs(dy) > Math.abs(dx) * 1.2) action = 'reset';
-  else {
-    // 依螢幕上的方向，找最接近的隊友（第一人稱時從畫面下方的球出發）
-    const from = firstPerson() ? { x: innerWidth / 2, y: innerHeight * 0.95 } : toScreen(players.PG.pos, 1.0);
-    const sw = Math.atan2(dy, dx);
-    let best = null, bestDiff = Infinity, onTarget = null, onDist = Math.max(60, innerWidth * 0.08);
-    for (const key of OFFENSE) {
-      if (key === 'PG' || !inPlay(key)) continue;
-      // 方向跟著畫面：看到隊友在哪就往哪滑；不在畫面裡的隊友，往他那一側的螢幕邊緣滑
-      const to = toScreen(players[key].pos, 1.0);
-      const diff = Math.abs(angDiff(Math.atan2(to.y - from.y, to.x - from.x), sw));
-      if (diff < bestDiff) { bestDiff = diff; best = 'pass:' + key; }
-      // 手指放開的位置落在隊友身上（含上半身）＝明確要傳給他
-      const body = toScreen(players[key].pos, 1.2);
-      const dEnd = Math.hypot(e.clientX - body.x, e.clientY - body.y);
-      if (dEnd < onDist) { onDist = dEnd; onTarget = 'pass:' + key; }
-    }
-    const fromVertical = Math.abs(Math.atan2(dx, -dy)); // 0＝正上方
-    // 優先順序：滑到隊友身上 → 傳；往正上方（±17°）→ 切入；偏上但前方沒有隊友 → 切入；其他 → 傳給方向最近的隊友
-    if (onTarget) action = onTarget;
-    else if (dy < 0 && fromVertical < 0.3) action = 'drive';
-    else if (dy < 0 && fromVertical < 0.6 && (!best || bestDiff > 0.45)) action = 'drive';
-    else action = best || 'drive';
-  }
+  const action = classifySwipe(gesture.x, gesture.y, e.clientX, e.clientY);
   const t0 = gesture.t;  // 以手指按下的時間計算反應時間
   gesture = null;
   decide(action, t0);
 });
 const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
+
+// 手勢判定：點一下＝自己出手；滑（任何方向）＝傳球（長按切入在 pointerdown 的計時器處理）
+function classifySwipe(sx, sy, ex, ey) {
+  const dx = ex - sx, dy = ey - sy;
+  if (Math.hypot(dx, dy) < SWIPE_MIN) return 'shoot';
+  // 方向從手指按下的位置算起：手指從哪裡開始、往哪個隊友滑，就傳給他。方向跟著畫面；
+  // 不在畫面裡的隊友，往他那一側的螢幕邊緣滑
+  const sw = Math.atan2(dy, dx);
+  let best = null, bestDiff = Infinity, onTarget = null, onDist = Math.max(60, innerWidth * 0.08);
+  for (const key of OFFENSE) {
+    if (key === 'PG' || !inPlay(key)) continue;
+    const to = toScreen(players[key].pos, 1.0);
+    const diff = Math.abs(angDiff(Math.atan2(to.y - sy, to.x - sx), sw));
+    if (diff < bestDiff) { bestDiff = diff; best = 'pass:' + key; }
+    // 手指放開的位置落在隊友身上（含上半身）＝明確要傳給他
+    const body = toScreen(players[key].pos, 1.2);
+    const dEnd = Math.hypot(ex - body.x, ey - body.y);
+    if (dEnd < onDist) { onDist = dEnd; onTarget = 'pass:' + key; }
+  }
+  return onTarget || best || 'shoot';
+}
 function toScreen(p, h) {
   // 鏡頭後方的隊友投影會翻轉；改用鏡頭座標判斷他在左邊還是右邊，放到該側螢幕外面
   const cs = tmp.set(p.x, h, p.z).applyMatrix4(camera.matrixWorldInverse);
@@ -624,16 +640,10 @@ function updateBall(dt, t) {
     setArmsVisible(firstPerson());
     passAnim.t = Math.min(1, passAnim.t + dt / 0.45);
     const u = passAnim.t;
-    // 切入：球往籃框方向推進 2.5 m；轉移球：球往後拉 2 m（沒有指定接應者時）
-    const pg = players.PG.pos;
-    const toBasket = tmp.set(BASKET.x - pg.x, 0, BASKET.z - pg.z).normalize();
-    let to;
-    if (passAnim.target) to = passAnim.target.pos.clone().setY(1.2);
-    else if (passAnim.kind === 'drive') to = passAnim.from.clone().addScaledVector(toBasket, 2.5).setY(0.5);
-    else if (passAnim.kind === 'reset') to = passAnim.from.clone().addScaledVector(toBasket, -2.0).setY(0.6);
-    else to = BASKET.clone();
+    // 太晚投：打在籃框前緣彈出（不進）
+    const to = passAnim.target ? passAnim.target.pos.clone().setY(1.2) : passAnim.miss ? BASKET.clone().add(new THREE.Vector3(0.18, 0.05, 0.25)) : BASKET.clone();
     ball.position.lerpVectors(passAnim.from, to, u);
-    ball.position.y += Math.sin(u * Math.PI) * (passAnim.target ? 0.6 : passAnim.kind ? 0.3 : 1.6);
+    ball.position.y += Math.sin(u * Math.PI) * (passAnim.target ? 0.6 : 1.6);
     return;
   }
   const bounce = Math.abs(Math.sin(t * 7.5));
@@ -778,7 +788,8 @@ function frame(now) {
         if (cfg().hintRing) for (const r of rep.sc.cueRoles) players[r].ring.visible = since < 0.6;
         if (store.occlusion && since > (rep.sc.occludeAfter ?? OCCLUDE_AFTER)) for (const k of DEFENSE) players[k].root.visible = false;
         // 手指已在時間內按下（例如正在長按）就不判逾時
-        if (since > win && !gesture) decide('timeout', simToPerf(rep.onset + win));
+        // 時間到：不結束，等玩家做決定（UR：一定要等我做出決策）；之後的出手照樣做動作，但算太慢
+        if (since > win && !rep.late) { rep.late = true; $('timer').classList.add('late'); toast('太慢了！還是要做決定'); }
       }
       updateBall(dt, t);
     } else {

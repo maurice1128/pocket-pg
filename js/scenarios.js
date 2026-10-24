@@ -6,7 +6,7 @@
 // 動作代碼：'shoot'（自己出手）、'drive'（自己運球攻擊：切過撲防、從中間切穿、單打錯位）、
 //   'reset'（不攻擊：轉移、回傳、反向運球、退出來重新組織）、'pass:<O2|O3|O4|O5>'（為了攻擊而傳給那位隊友）。
 //   reset 和 pass 分開算，才能統計「沒優勢硬打率」與「優勢浪費率」（docs/scenario_bank_v2.md 0.3、3.2 節）。
-// resetTargets：答案是 'reset' 時，往陣列裡的隊友滑（例 ['O4']）也算 reset；往下滑一律算 reset。
+// resetTargets：答案是 'reset'（不攻擊）時，傳給陣列裡的外圍安全接應者算正確（例 ['O4']）。
 // pressure：時間壓力，'loose'（寬鬆，外圍觀察，決策窗 ×2.2）、'medium'（×1.4）、'tight'（×1.0，預設）。倍數是假設（scenario_bank_v2 0.4 節）。
 // labels：覆寫結果卡上的動作文字，例 { reset: '轉移球（Swing）', drive: '切過撲防' }；沒寫的用 ACTIONS 或引擎預設。
 // look：第一人稱視線偏向某隊友（{ role, w }，w＝從籃框往該隊友插值的比例）；occludeAfter：遮蔽模式 onset 後幾秒隱藏防守者。
@@ -242,11 +242,11 @@ export const SCENARIOS = [
     answer: 'reset',
     partial: [],
     pressure: 'loose',
-    resetTargets: [],
-    labels: { reset: '拉出來、等隊友（Pull out）', shoot: '一個人硬攻', drive: '一個人硬切' },
+    resetTargets: ['O2', 'O3', 'O4', 'O5'],
+    labels: { reset: '回傳給跟上的隊友（Pull out）', shoot: '一個人硬攻', drive: '一個人硬切' },
     fixedX3: true,
     occludeAfter: 0.5,
-    explain: '快攻只在有人數優勢時打。現在前面有三個防守者站好，只有你一個人到位：沒有優勢，就不要一個人衝進三個人裡。停下來、把球拉回，等隊友跟上再進入早期進攻。最佳選擇：拉出來（往下滑）。要快，但不要急。',
+    explain: '快攻只在有人數優勢時打。現在前面有三個防守者站好，只有你一個人到位：沒有優勢，就不要一個人衝進三個人裡。停下來、把球拉回，等隊友跟上再進入早期進攻。最佳選擇：不要硬攻，把球回傳給後面跟上的隊友，等大家到位再進攻（往後面的隊友滑）。要快，但不要急。',
     mistake: '一個人衝進三人防守裡硬上籃。',
     offense: {
       PG: [[-1.2, 0.6, 14.6], [-0.4, 0.4, 11.8], [0.1, 0.3, 10.4], [0.5, 0.4, 9.9], [1.2, 0.9, 10.6], [2.0, 1.2, 11.0]],
@@ -448,7 +448,7 @@ export const SCENARIOS = [
     look: WING_LOOK,
     fixedX3: true,
     occludeAfter: 0.4,
-    explain: '五個防守者都在正確位置：你的防守者在一臂距離，底角被阻絕，低位被 3/4 繞前，弱側站在協防位置（ball-you-man）。沒有優勢就不要硬打：把球回傳弧頂、轉到另一側，讓防守再移動一次，空檔通常在轉移之後出現。最佳選擇：轉移球（往弧頂滑或往下滑）。',
+    explain: '五個防守者都在正確位置：你的防守者在一臂距離，底角被阻絕，低位被 3/4 繞前，弱側站在協防位置（ball-you-man）。沒有優勢就不要硬打：把球回傳弧頂、轉到另一側，讓防守再移動一次，空檔通常在轉移之後出現。最佳選擇：轉移球（往外圍的隊友滑）。',
     mistake: '對著到位的防守者硬切，或急停投出被干擾的球；運球太多，讓隊友站著看。',
     offense: NOADV_OFFENSE,
     defense: Object.assign({}, NOADV_DEFENSE, { X1: NOADV_X1_SET }),
@@ -512,11 +512,11 @@ export const SCENARIOS = [
     answer: 'reset',
     partial: [],
     pressure: 'medium',
-    resetTargets: [],
+    resetTargets: ['O4', 'O2'],
     labels: DRIVE5_LABELS,
     look: DRIVE_LOOK,
     occludeAfter: 0.5,
-    explain: '這次切入沒有逼出任何人離開位置：你的防守者追回到你前面，大個子站在籃框前、擋在你和籃下隊友之間，外線三個人都貼著自己的人。分球路線都有人，硬切會撞人或被抄。收運球前退出來，把球轉到另一側重新組織。最佳選擇：退出來（往下滑）。和「切入 vs 底角協防」「Nail 協防」比一比：看有沒有人離開自己的人。',
+    explain: '這次切入沒有逼出任何人離開位置：你的防守者追回到你前面，大個子站在籃框前、擋在你和籃下隊友之間，外線三個人都貼著自己的人。分球路線都有人，硬切會撞人或被抄。收運球前退出來，把球轉到另一側重新組織。最佳選擇：退出來（往外圍的隊友滑）。和「切入 vs 底角協防」「Nail 協防」比一比：看有沒有人離開自己的人。',
     mistake: '硬切撞人、起跳後才在空中找人，或把球塞給有人看住的隊友。',
     offense: { PG: [...PG_DRIVE.slice(0, 3), [0.4, 1.95, 5.2], [0.9, 2.15, 5.55], [1.6, 2.55, 6.4]], O5: DUNKER },
     defense: {
