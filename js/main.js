@@ -467,19 +467,30 @@ $('calib-pad').addEventListener('pointerdown', (e) => {
 
 // ---------- 輸入：滑向隊友 = 傳球，點一下 / 下滑 = 急停跳投 ----------
 let gesture = null;
+const SWIPE_MIN = 14;   // 滑動超過幾像素才算滑（越小越敏感）
+const HOLD_MS = 350;   // 按住不動超過這個時間＝長按切入（決策時間仍以按下那一刻計算）
 canvas.addEventListener('pointerdown', (e) => {
   if (state !== 'play') { gesture = null; return; }
-  gesture = { x: e.clientX, y: e.clientY, t: e.timeStamp, id: e.pointerId, rep };
+  const g = gesture = { x: e.clientX, y: e.clientY, t: e.timeStamp, id: e.pointerId, rep, moved: false };
+  g.timer = setTimeout(() => {
+    if (gesture !== g || g.moved || state !== 'play' || g.rep !== rep) return;
+    gesture = null;
+    decide('drive', g.t);
+  }, HOLD_MS);
   try { canvas.setPointerCapture(e.pointerId); } catch { /* 忽略 */ }
 });
-canvas.addEventListener('pointercancel', () => { gesture = null; });
+canvas.addEventListener('pointermove', (e) => {
+  if (gesture && e.pointerId === gesture.id && Math.hypot(e.clientX - gesture.x, e.clientY - gesture.y) >= SWIPE_MIN) gesture.moved = true;
+});
+canvas.addEventListener('pointercancel', () => { if (gesture) clearTimeout(gesture.timer); gesture = null; });
 canvas.addEventListener('pointerup', (e) => {
+  if (gesture) clearTimeout(gesture.timer);
   if (state !== 'play' || !gesture || e.pointerId !== gesture.id || gesture.rep !== rep) { gesture = null; return; }
   const dx = e.clientX - gesture.x, dy = e.clientY - gesture.y;
   const dist = Math.hypot(dx, dy);
   let action;
-  // 點一下＝自己出手；往下滑＝轉移球／重新組織；往隊友滑＝傳球；往上滑且前方沒有隊友＝切入
-  if (dist < 24) action = 'shoot';
+  // 點一下＝自己出手；長按或往正上方滑＝切入；往下滑＝轉移球；往隊友滑或滑到隊友身上＝傳球
+  if (dist < SWIPE_MIN) action = 'shoot';
   else if (dy > 0 && Math.abs(dy) > Math.abs(dx) * 1.2) action = 'reset';
   else {
     // 依螢幕上的方向，找最接近的隊友（第一人稱時從畫面下方的球出發）
@@ -665,11 +676,13 @@ function updateCamera(dt) {
 
 // ---------- 轉頭模式（陀螺儀）：像 VR 一樣轉動手機找資訊（Pagé et al., 2019） ----------
 const gyro = { enabled: false, zero: null, yaw: 0, seen: false };
+const GYRO_GAIN = 1.5;
 addEventListener('deviceorientation', (e) => {
   if (e.alpha == null) return;
   gyro.seen = true;
   if (gyro.zero == null) gyro.zero = e.alpha;
-  gyro.yaw = angDiff(e.alpha * Math.PI / 180, gyro.zero * Math.PI / 180);
+  // 放大 1.5 倍：手機轉 40°，視線轉 60°，不用大幅轉身（上限 ±110°）
+  gyro.yaw = Math.max(-1.92, Math.min(1.92, GYRO_GAIN * angDiff(e.alpha * Math.PI / 180, gyro.zero * Math.PI / 180)));
 });
 async function enableGyro() {
   try {
@@ -739,7 +752,8 @@ function frame(now) {
         $('timer-fill').style.transform = `scaleX(${Math.max(0, 1 - since / win)})`;
         if (cfg().hintRing) for (const r of rep.sc.cueRoles) players[r].ring.visible = since < 0.6;
         if (store.occlusion && since > (rep.sc.occludeAfter ?? OCCLUDE_AFTER)) for (const k of DEFENSE) players[k].root.visible = false;
-        if (since > win) decide('timeout', simToPerf(rep.onset + win));
+        // 手指已在時間內按下（例如正在長按）就不判逾時
+        if (since > win && !gesture) decide('timeout', simToPerf(rep.onset + win));
       }
       updateBall(dt, t);
     } else {
