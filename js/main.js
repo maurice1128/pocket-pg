@@ -154,6 +154,24 @@ const inPlay = (r) => store.players5 !== false || !EXTRA_ROLES.includes(r);
 window.__pp = {
   players, camera, get rep() { return rep; }, get state() { return state; },
   play(id) { session = { started: new Date().toISOString(), order: [id], results: [], u: 0, s: 0 }; nextRep(); },
+  // 穿模檢查用：產生一題的路徑（含鏡像與微擾）
+  buildRep: (id) => buildRep(SCENARIOS.find((s) => s.id === id)),
+  MIN_SEP: () => MIN_SEP,
+  // 用真正的引擎把一題從頭跑到尾，回傳任兩名球員的最近距離（穿模檢查）
+  simulate(id) {
+    this.play(id);
+    const roles = Object.keys(players).filter(inPlay);
+    let worst = { d: 99 };
+    for (let t = rep.tStart; t <= rep.tEnd + 0.4; t += 1 / 60) {
+      updatePlayers(1 / 60, t);
+      for (let i = 0; i < roles.length; i++) for (let j = i + 1; j < roles.length; j++) {
+        const d = players[roles[i]].pos.distanceTo(players[roles[j]].pos);
+        if (d < worst.d) worst = { d, a: roles[i], b: roles[j], t: +(t - rep.onset).toFixed(2) };
+      }
+    }
+    state = 'home';
+    return worst;
+  },
 };
 
 // 第一人稱的雙手（前臂 + 手掌），每幀依鏡頭位置擺放
@@ -286,6 +304,7 @@ function nextRep() {
     p.heading = Math.atan2(BASKET.x - p.pos.x, BASKET.z - p.pos.z);
     if (p.defender) p.heading = Math.atan2(players.PG.pos.x - p.pos.x, players.PG.pos.z - p.pos.z);
   }
+  separateNow();
   // 假撲的防守者要一直面向持球者（髖部不轉），真內縮會轉向跑動方向
   players.X3.faceMode = rep.sc.stunt ? 'ball' : 'move';
   $('hud-rep').textContent = `第 ${session.u + 1} / ${session.order.length} 題` + (poss ? `（判斷 ${session.s + 1}/${poss.steps.length}）` : '');
@@ -492,14 +511,45 @@ const camPos = new THREE.Vector3(), camLook = new THREE.Vector3();
 const desiredPos = new THREE.Vector3(), desiredLook = new THREE.Vector3();
 let lastFrame = performance.now();
 
+// 身體不能互相穿過：兩人中心距離至少 MIN_SEP（膠囊半徑 0.27 m ×2，加一點衣服厚度）。
+// 掩護、包夾時是肩碰肩，不是重疊。
+const MIN_SEP = 0.58;
+function separate(list) {
+  for (let iter = 0; iter < 4; iter++) {
+    for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
+      const A = list[i].next, B = list[j].next;
+      let dx = B.x - A.x, dz = B.z - A.z;
+      let d = Math.hypot(dx, dz);
+      if (d >= MIN_SEP) continue;
+      if (d < 1e-4) { dx = 1; dz = 0; d = 1e-4; } // 完全重疊時隨便選一個方向推開
+      const push = (MIN_SEP - d) / 2;
+      A.x -= dx / d * push; A.z -= dz / d * push;
+      B.x += dx / d * push; B.z += dz / d * push;
+    }
+  }
+}
+
+// 開場或重播的起始站位也要先分開
+function separateNow() {
+  const active = Object.entries(players).filter(([r]) => inPlay(r)).map(([, p]) => p);
+  for (const p of active) p.next = p.pos.clone();
+  separate(active);
+  for (const p of active) { p.pos.copy(p.next); p.root.position.copy(p.pos); }
+}
+
 function updatePlayers(dt, t) {
-  for (const p of Object.values(players)) {
+  const active = [];
+  for (const [r, p] of Object.entries(players)) {
     samplePath(p.path, t, tmp);
     // 跟隨目標點的彈簧：產生自然的加速延遲（防守者稍慢）
     const k = p.defender ? 7 : 10;
+    p.next = p.pos.clone().lerp(tmp, 1 - Math.exp(-k * dt));
+    if (inPlay(r)) active.push(p);
+  }
+  separate(active);
+  for (const p of Object.values(players)) {
     const prevVel = p.vel.clone();
-    const a = 1 - Math.exp(-k * dt);
-    const next = p.pos.clone().lerp(tmp, a);
+    const next = p.next;
     if (dt > 0) { p.vel.copy(next).sub(p.pos).divideScalar(dt); p.acc.copy(p.vel).sub(prevVel).divideScalar(dt); }
     p.pos.copy(next);
     p.root.position.copy(p.pos);
@@ -765,6 +815,7 @@ $('btn-replay').addEventListener('click', () => {
   simT = rep.tStart;
   passAnim = null;
   for (const p of Object.values(players)) { samplePath(p.path, rep.tStart, p.pos); p.vel.set(0, 0, 0); p.acc.set(0, 0, 0); }
+  separateNow();
 });
 $('btn-overhead').addEventListener('click', () => {
   overhead = !overhead;
