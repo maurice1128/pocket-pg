@@ -163,6 +163,7 @@ export const SCENARIOS = [
   // ---------- Level 1：2 打 1 快攻（tactics_audit.md 第 5 節 N1、N2） ----------
   {
     id: 'fb_2v1_commit',
+    cue: '防守者撲向你', // 結果卡一行重點：看什麼
     evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
     sources: ['NBA Coaches Playbook p.166–167（圖 10.1 站位）', 'ASEP p.137（跑寬）', 'WABC Coaches Manual p.21（Driving Lane）'],
@@ -183,6 +184,7 @@ export const SCENARIOS = [
   },
   {
     id: 'fb_2v1_stay',
+    cue: '防守者退守隊友', // 結果卡一行重點：看什麼
     evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
     sources: ['NBA Coaches Playbook p.166–167（圖 10.1 站位）', 'ASEP p.137（跑寬）', 'WABC Coaches Manual p.27'],
@@ -206,6 +208,7 @@ export const SCENARIOS = [
   // A1／A2 是姊妹題：開場完全相同，只有上方防守者 X1 的動作不同
   {
     id: 'fb_3v2_top_stop',
+    cue: '上方防守者擋你', // 結果卡一行重點：看什麼
     evidence: 'medium', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
     sources: ['WABC Coaches Manual p.21', 'NBA Coaches Playbook p.166–167', '[由 2 打 1 原則推論，需教練確認]'],
@@ -228,6 +231,7 @@ export const SCENARIOS = [
   },
   {
     id: 'fb_3v2_top_sag',
+    cue: '上方防守者後退', // 結果卡一行重點：看什麼
     evidence: 'weak', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
     sources: ['NBA Coaches Playbook p.166–167', 'WABC Coaches Manual p.21、p.27', '[由 2 打 1 原則推論，需教練確認]'],
@@ -250,6 +254,7 @@ export const SCENARIOS = [
   },
   {
     id: 'fb_even_pullout',
+    cue: '防守人數到齊', // 結果卡一行重點：看什麼
     evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
     sources: ['ASEP p.138–139', 'NBA Coaches Playbook p.136、p.180', 'Canada Basketball LTAD PDF p.58（背景）'],
@@ -281,6 +286,7 @@ export const SCENARIOS = [
   // ---------- Level 1–2：切入分球 ----------
   {
     id: 'drive_help',
+    cue: '底角防守者來協防', // 結果卡一行重點：看什麼
     evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft', // draft → coach_1 → approved（3 位教練一致）
     sources: ['ASEP p.132–134', 'NBA Coaches Playbook p.81 圖 5.14（強側協防，原理相同）'],
@@ -304,6 +310,7 @@ export const SCENARIOS = [
   },
   {
     id: 'drive_nohelp',
+    cue: '沒有人協防', // 結果卡一行重點：看什麼
     evidence: 'medium', // 依 docs/citation_check.md 第 3 節
     status: 'draft', // draft → coach_1 → approved（3 位教練一致）
     sources: ['NBA Coaches Playbook p.21（Direct Drive）', 'ASEP p.133'],
@@ -329,6 +336,7 @@ export const SCENARIOS = [
   // ---------- Level 2：切入分球進階（scenario_bank_v2 B1、B2） ----------
   {
     id: 'drive_baseline_corner',
+    cue: '強側底角防守者協防', // 結果卡一行重點：看什麼
     evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
     sources: ['NBA Coaches Playbook p.81 圖 5.14', 'ASEP p.134'],
@@ -356,6 +364,7 @@ export const SCENARIOS = [
   },
   {
     id: 'drive_nail_help',
+    cue: '中路（Nail）協防', // 結果卡一行重點：看什麼
     evidence: 'medium', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
     sources: ['ASEP p.134', 'coachingtoolbox.net/defense/defending-nba-pick-roll.html（擋拆情境類推）'],
@@ -384,6 +393,7 @@ export const SCENARIOS = [
   // ---------- Level 2–3：撲防閱讀（scenario_bank_v2 C1–C3）：你在側翼接球，三題開場相同 ----------
   {
     id: 'closeout_late_shoot',
+    cue: '撲防來不及', // 結果卡一行重點：看什麼
     evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
     sources: ['ASEP p.133', 'NBA Coaches Playbook p.21', 'WABC Coaches Manual p.19'],
@@ -406,6 +416,7 @@ export const SCENARIOS = [
   },
   {
     id: 'closeout_flyby_drive',
+    cue: '撲防衝過頭', // 結果卡一行重點：看什麼
     evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
     sources: ['NBA Coaches Playbook p.165、p.234', 'ASEP p.133', 'WABC Coaches Manual p.19'],
@@ -428,6 +439,7 @@ export const SCENARIOS = [
   },
   {
     id: 'closeout_extra_pass',
+    cue: '撲防到位、下一個人空', // 結果卡一行重點：看什麼
     evidence: 'medium', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
     sources: ['ASEP p.133', 'NBA Coaches Playbook p.68、p.79、p.87', 'hooperuniversity.com/breakdowns/understanding-how-to-play-with-the-advantage'],
@@ -452,6 +464,7 @@ export const SCENARIOS = [
   // H1／H2／H3 是三姊妹：開場完全相同，只有 X1 的撲防不同（早到站好／太慢還在衝／準時碎步）
   {
     id: 'noadv_wing_reverse',
+    cue: '五個人都站好', // 結果卡一行重點：看什麼
     evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
     sources: ['NBA Coaches Playbook p.77、p.79', 'ASEP p.157', 'WABC Coaches Manual p.30'],
@@ -475,6 +488,7 @@ export const SCENARIOS = [
   },
   {
     id: 'noadv_swing_late_closeout',
+    cue: '轉移後撲防太慢', // 結果卡一行重點：看什麼
     evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
     sources: ['ASEP p.133（偏向投）', 'NBA Coaches Playbook p.21、p.79、p.85（偏向切）、p.229', 'WABC Coaches Manual p.19', 'WABC Coaches Manual p.30、ASEP p.157（弱側站位）'],
@@ -498,6 +512,7 @@ export const SCENARIOS = [
   },
   {
     id: 'noadv_swing_again',
+    cue: '轉移後防守到位', // 結果卡一行重點：看什麼
     evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
     sources: ['NBA Coaches Playbook p.77、p.79、p.83', 'WABC Coaches Manual p.30、ASEP p.157（弱側站位）'],
@@ -522,6 +537,7 @@ export const SCENARIOS = [
   // H4：和 drive_help／drive_nohelp／drive_nail_help 同開場（onset 前只有 X5 先站到籃框前）
   {
     id: 'noadv_drive_wall',
+    cue: '切入被牆擋住', // 結果卡一行重點：看什麼
     evidence: 'medium', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
     sources: ['hooperuniversity.com/breakdowns/understanding-how-to-play-with-the-advantage', 'NBA Coaches Playbook p.81–82（部分支持）', 'ASEP p.115（書建議改傳球）'],
@@ -551,6 +567,7 @@ export const SCENARIOS = [
   // ---------- Level 2：無球隊友閱讀：後門切（scenario_bank_v2 E1） ----------
   {
     id: 'backdoor_overplay',
+    cue: '隊友被過度阻絕', // 結果卡一行重點：看什麼
     evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
     sources: ['ASEP p.82、p.114、p.140–142', 'NBA Coaches Playbook p.113、p.117', 'WABC Coaches Manual p.17'],
@@ -584,6 +601,7 @@ export const SCENARIOS = [
   // ---------- Level 2：擋拆基礎 ----------
   {
     id: 'pnr_drop',
+    cue: '大個子沉退', // 結果卡一行重點：看什麼
     evidence: 'medium', // 依 docs/citation_check.md 第 3 節
     status: 'draft', // draft → coach_1 → approved（3 位教練一致）
     sources: ['NBA Coaches Playbook p.256', 'FIBA OBRI 2024 26-3（p.51）'],
@@ -605,6 +623,7 @@ export const SCENARIOS = [
   },
   {
     id: 'pnr_high_drop',
+    cue: '大個子站太高', // 結果卡一行重點：看什麼
     evidence: 'medium', // 依 docs/citation_check.md 第 3 節
     status: 'draft', // draft → coach_1 → approved（3 位教練一致）
     sources: ['thehoopsgeek.com/pick-and-roll-defense［網］', '[沒有書面依據，需教練確認]'],
@@ -626,6 +645,7 @@ export const SCENARIOS = [
   },
   {
     id: 'pnr_under',
+    cue: '防守者從掩護下方繞', // 結果卡一行重點：看什麼
     evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft', // draft → coach_1 → approved（3 位教練一致）
     sources: ['NBA Coaches Playbook p.58 圖 4.22、p.60 圖 4.28、p.256–257', 'ASEP p.148', '[X1 繞下路線與順下時機為推論，需教練確認]'],
@@ -648,6 +668,7 @@ export const SCENARIOS = [
   // ---------- Level 3：擋拆進階 ----------
   {
     id: 'pnr_hedge',
+    cue: '大個子延誤、弱側沒補', // 結果卡一行重點：看什麼
     evidence: 'medium', // 依 docs/citation_check.md 第 3 節
     status: 'draft', // draft → coach_1 → approved（3 位教練一致）
     sources: ['ASEP p.146、p.203', 'NBA Coaches Playbook p.85、p.255–256', 'thehoopsgeek.com/pick-and-roll-defense'],
@@ -666,6 +687,7 @@ export const SCENARIOS = [
   // pnr_hedge 的姊妹題（scenario_bank_v2 D4）：onset 前完全相同，之後大個子馬上退回、你的防守者追回
   {
     id: 'pnr_hedge_recovered',
+    cue: '延誤後兩人都回位', // 結果卡一行重點：看什麼
     evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
     sources: ['NBA Coaches Playbook p.53、p.77、p.79'],
@@ -687,6 +709,7 @@ export const SCENARIOS = [
   },
   {
     id: 'pnr_blitz',
+    cue: '兩人包夾你', // 結果卡一行重點：看什麼
     evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft', // draft → coach_1 → approved（3 位教練一致）
     sources: ['ASEP p.148、p.126、p.184', 'NBA Coaches Playbook p.59–60 圖 4.25、p.257 圖 16.1、p.80–81、p.83 圖 5.20（接應者）', '[接應者 O4 與 X4 的位置為推論，需教練確認]'],
@@ -712,6 +735,7 @@ export const SCENARIOS = [
   },
   {
     id: 'pnr_tag_commit',
+    cue: '弱側真內縮', // 結果卡一行重點：看什麼
     evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft', // draft → coach_1 → approved（3 位教練一致）
     sources: ['ASEP p.126、p.134', '[卡位落點（順下者正前方）與順下被擋慢為推論，需教練確認]'],
@@ -737,6 +761,7 @@ export const SCENARIOS = [
   },
   {
     id: 'pnr_switch',
+    cue: '大個子換防到你', // 結果卡一行重點：看什麼
     evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft', // draft → coach_1 → approved（3 位教練一致）
     sources: ['ASEP p.147–148、p.200–201', 'NBA Coaches Playbook p.257'],
@@ -759,6 +784,7 @@ export const SCENARIOS = [
   // ---------- Level 3：側翼擋拆 vs 封底線（scenario_bank_v2 D1） ----------
   {
     id: 'pnr_ice_pop',
+    cue: '封底線（Ice）', // 結果卡一行重點：看什麼
     evidence: 'medium', // 依 docs/citation_check.md 第 3 節
     status: 'draft',
     sources: ['NBA Coaches Playbook p.258 圖 16.4、16.6–16.7', 'NBA Coaches Playbook p.54（掩護者往持球者的反方向）', 'thehoopsgeek.com/basketball-plays/pick-roll-against-ice-defense', '[外彈落點（罰球區角上方）與外彈跳投為推論，需教練確認]'],
@@ -787,6 +813,7 @@ export const SCENARIOS = [
   // ---------- Level 4：假動作辨識 ----------
   {
     id: 'pnr_tag_stunt',
+    cue: '弱側假撲', // 結果卡一行重點：看什麼
     evidence: 'strong', // 依 docs/citation_check.md 第 3 節
     status: 'draft', // draft → coach_1 → approved（3 位教練一致）
     sources: ['ASEP p.126、p.132'],

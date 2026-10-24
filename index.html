@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="theme-color" content="#14161a">
 <title>口袋控衛 Pocket PG</title>
-<link rel="stylesheet" href="style.css?v=0700">
+<link rel="stylesheet" href="style.css?v=0800">
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
 </script>
@@ -16,7 +16,12 @@
 <!-- 比賽中 HUD -->
 <div id="hud" class="hidden">
   <div id="hud-top"><span id="hud-rep"></span><span id="hud-play">高位擋拆</span><span id="hud-score"></span></div>
-  <div id="hud-hint">點一下 投　｜　滑向隊友 傳　｜　長按 切入</div>
+  <div id="hud-hint">點隊友或往隊友滑＝傳</div>
+  <div id="actions">
+    <button id="btn-drive" aria-label="切入">切</button>
+    <button id="btn-shoot" aria-label="投籃">投</button>
+  </div>
+  <div id="phase" class="hidden">戰術進行中</div>
   <div id="timer"><div id="timer-fill"></div></div>
   <div id="toast" class="hidden"></div>
   <div id="fp-rotate" class="hidden">橫向拿手機，才看得到弱側底角</div>
@@ -27,6 +32,10 @@
   <div class="card">
     <h1>口袋控衛</h1>
     <p class="sub">Pocket PG · 擋拆閱讀訓練（原型）</p>
+    <div class="row">
+      <label for="topic">練習主題</label>
+      <select id="topic"></select>
+    </div>
     <div class="row">
       <label>難度</label>
       <div class="seg" id="diff">
@@ -99,10 +108,14 @@
 <section id="result" class="screen hidden overlay">
   <div class="card">
     <h2 id="res-title"></h2>
+    <p id="res-key" class="keyline"></p>
     <p id="res-time"></p>
-    <p id="res-coverage" class="tag"></p>
-    <p id="res-explain"></p>
-    <p id="res-mistake" class="note"></p>
+    <button id="btn-why">看解說</button>
+    <div id="res-more" class="hidden">
+      <p id="res-coverage" class="tag"></p>
+      <p id="res-explain"></p>
+      <p id="res-mistake" class="note"></p>
+    </div>
     <div class="btns">
       <button id="btn-replay">重播</button>
       <button id="btn-overhead">俯視回放</button>
@@ -124,6 +137,6 @@
   </div>
 </section>
 
-<script type="module" src="js/main.js?v=0700"></script>
+<script type="module" src="js/main.js?v=0800"></script>
 </body>
 </html>

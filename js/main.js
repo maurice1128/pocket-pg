@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0700';
+import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0800';
 
 // ---------- 設定 ----------
 // levels：該難度會出的題目等級（初階 → 進階的分級課程）
@@ -9,6 +9,18 @@ const DIFF = {
   hard:   { label: '進階', window: 0.75, timeScale: 1.0, hintRing: false, levels: [2, 3, 4] },
 };
 const REPS_PER_SESSION = 10;
+// 練習主題（教練回饋 #1-3）。phase＝戰術前段自動進行時顯示的提示
+const TOPICS = [
+  { id: 'all', name: '全部主題', match: () => true },
+  { id: 'closeout', name: '撲防判斷（Close out）', phase: '你接到球…', match: (s) => s.id.startsWith('closeout_') || s.id === 'noadv_swing_late_closeout' || s.id === 'noadv_swing_again' },
+  { id: 'advantage', name: '快攻多打少', phase: '快攻推進中…', match: (s) => s.id.startsWith('fb_') },
+  { id: 'pnr', name: '擋拆判斷', phase: '繞過掩護中…', match: (s) => s.id.startsWith('pnr_') },
+  { id: 'drive', name: '切入分球', phase: '你正在切入…', match: (s) => s.id.startsWith('drive_') || s.id === 'noadv_drive_wall' },
+  { id: 'noadv', name: '沒有優勢：轉移球', phase: '外圍持球…', match: (s) => s.answer === 'reset' || s.id.startsWith('noadv_') },
+  { id: 'offball', name: '無球：後門', phase: '觀察隊友…', match: (s) => s.id.startsWith('backdoor') },
+  { id: 'dho', name: '手遞手（製作中）', match: () => false, disabled: true },
+];
+const phaseText = (sc) => (TOPICS.find((tp) => tp.id !== 'all' && tp.match(sc)) || {}).phase || '戰術進行中…';
 // 時間壓力：外圍觀察可以慢慢看（寬鬆），關鍵瞬間才緊迫。乘在難度的決策窗上
 const PRESSURE = { loose: 2.2, medium: 1.4, tight: 1.0 };
 const INTRO = 0.9;          // 每題開始前的停頓（秒）
@@ -239,6 +251,10 @@ function buildRep(sc) {
   const posJ = () => [rand(-0.25, 0.25), rand(-0.25, 0.25)];
   const tf = (path, jitterT = 0, pj = [0, 0]) => path.map(([t, x, z]) => [t + jitterT, (x + pj[0]) * mirror, z + pj[1]]);
   const off = Object.assign({}, DEFAULT_OFFENSE, sc.offense);
+  // 教練回饋 #1-2：你（PG）只在戰術前段被帶著走，到決策點（onset 後 0.3 秒內）停下原地運球；之後只有按「切」才會動
+  const stopT = sc.pgStop ?? 0.3;
+  const pgStopPos = samplePath(off.PG, stopT, new THREE.Vector3());
+  off.PG = [...off.PG.filter(([tt]) => tt < stopT), [stopT, pgStopPos.x, pgStopPos.z]];
   const def = Object.assign({}, DEFAULT_DEFENSE, sc.defense);
   // X3 開場位置在協防點與底角之間隨機（避免看站位就猜題），位移隨時間淡出，終點維持原設計
   const x3Shift = sc.fixedX3 ? 0 : rand(-0.2, 1.6);
@@ -288,17 +304,22 @@ function startSession() {
   // 3v3 教學模式沒有 O2／O4，用到他們的題目先不出
   const needsExtra = (s) => [s.answer, ...(s.partial || []), ...(s.resetTargets || []).map((r) => 'pass:' + r)]
     .some((a) => a === 'pass:O2' || a === 'pass:O4');
+  const topic = TOPICS.find((tp) => tp.id === (store.topic || 'all')) || TOPICS[0];
+  const inTopic = (s) => topic.match(s);
   const ids = [...SCENARIOS, ...POSSESSIONS]
+    .filter(inTopic)
     // 書面依據弱的題目不進一般訓練，等教練確認（evidence 改成 medium 以上，或 status 改成 approved）
     .filter((s) => s.evidence !== 'weak' || s.status === 'approved')
     .filter((s) => !s.chainOnly && cfg().levels.includes(s.level) && (store.players5 !== false || !needsExtra(s)))
     .map((s) => s.id);
+  // 選了主題但這個難度沒有題目：放寬等級限制
+  if (!ids.length) ids.push(...SCENARIOS.filter((s) => inTopic(s) && s.evidence !== 'weak').map((s) => s.id));
   const order = [...ids].sort(() => Math.random() - 0.5).slice(0, REPS_PER_SESSION);
   while (order.length < REPS_PER_SESSION) order.push(ids[Math.floor(Math.random() * ids.length)]);
   order.sort(() => Math.random() - 0.5);
   session = {
     started: new Date().toISOString(), difficulty: store.difficulty, occlusion: store.occlusion, baseline: store.baseline,
-    view: store.view, gyro: gyro.enabled, players: store.players5 !== false ? 5 : 3, order, results: [], u: 0, s: 0,
+    view: store.view, gyro: gyro.enabled, players: store.players5 !== false ? 5 : 3, topic: store.topic || 'all', order, results: [], u: 0, s: 0,
   };
   nextRep();
 }
@@ -414,10 +435,14 @@ function showResult() {
   const yours = d.action === 'timeout' ? '沒有出手' : actionLabel(sc, raw) + (raw.startsWith('pass:') && d.action === 'reset' ? '（轉移球）' : '');
   $('res-time').textContent = d.decisionMs != null ? `你的選擇：${yours}　決策時間 ${d.decisionMs} ms` : `你的選擇：${yours}`;
   // 「不攻擊」的正解寫成具體做法：傳給哪個安全接應者，或運球退出來
-  const resetText = () => '不攻擊：' + [...(sc.resetTargets || []).map((r) => (ACTIONS['pass:' + r] || r) + '（轉移球）'), '運球退出來'].join('或');
+  const resetText = () => '不攻擊，' + ((sc.resetTargets || []).map((r) => ACTIONS['pass:' + r] || r).join('或') || '回傳') + '（轉移球）';
   const bests = [sc.answer, ...(sc.alsoBest || [])].map((a) => (a === 'reset' ? resetText() : actionLabel(sc, a))).join('、');
   const oks = (sc.partial || []).map((a) => actionLabel(sc, a)).join('、');
-  $('res-coverage').textContent = `${sc.name} → 最佳：${bests}` + (oks ? `；可接受：${oks}` : '');
+  // 一行重點：看什麼 → 做什麼（教練回饋 #1-4：文字太多）；細節收進「看解說」
+  $('res-key').innerHTML = `看：<b>${sc.cue || sc.name}</b>　→　做：<b>${bests}</b>`;
+  $('res-more').classList.add('hidden');
+  $('btn-why').textContent = '看解說';
+  $('res-coverage').textContent = `${sc.name}` + (oks ? `｜可接受：${oks}` : '');
   $('res-explain').textContent = sc.explain;
   const strength = { strong: '強', medium: '中', weak: '弱，需教練確認' }[sc.evidence] || '未評';
   const review = (sc.status === 'approved' ? '已通過教練審核' : '答案初版，待教練審核') + `；書面依據強度：${strength}`;
@@ -504,48 +529,44 @@ $('calib-pad').addEventListener('pointerdown', (e) => {
   } else scheduleDot();
 });
 
-// ---------- 輸入：滑向隊友 = 傳球，點一下 / 下滑 = 急停跳投 ----------
+// ---------- 輸入（教練回饋 #1：投、傳、切要直觀） ----------
+// 投＝按「投」鈕；切＝按「切」鈕；傳＝點隊友，或往隊友滑（滑動時白圈即時顯示誰會接球）
 let gesture = null;
 const SWIPE_MIN = 14;   // 滑動超過幾像素才算滑（越小越敏感）
-const HOLD_MS = 350;   // 按住不動超過這個時間＝長按切入（決策時間仍以按下那一刻計算）
-const HOLD_SLOP = 26;  // 長按時手指自然晃動的容許範圍（像素）
 // 手機長按時，瀏覽器會想跳出選單／選取文字並取消觸控，要先擋掉
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 canvas.addEventListener('touchstart', (e) => { if (state === 'play') e.preventDefault(); }, { passive: false });
 canvas.addEventListener('touchmove', (e) => { if (state === 'play') e.preventDefault(); }, { passive: false });
 canvas.addEventListener('pointerdown', (e) => {
   if (state !== 'play') { gesture = null; return; }
-  const g = gesture = { x: e.clientX, y: e.clientY, t: e.timeStamp, id: e.pointerId, rep, moved: false };
-  g.yaw0 = gyro.yaw; // 記下按下那一刻的視線方向，放開時校正轉動造成的偏移
-  g.timer = setTimeout(() => {
-    if (gesture !== g || g.held || state !== 'play' || g.rep !== rep) return;
-    if (Math.hypot(g.lastX - g.x, g.lastY - g.y) > HOLD_SLOP) return; // 手指已經在滑，不算長按
-    gesture = null;
-    toast('切入！');
-    decide('drive', g.t);
-  }, HOLD_MS);
-  g.lastX = e.clientX; g.lastY = e.clientY;
+  gesture = { x: e.clientX, y: e.clientY, t: e.timeStamp, id: e.pointerId, rep, lastX: e.clientX, lastY: e.clientY };
+  gesture.yaw0 = gyro.yaw; // 記下按下那一刻的視線方向，放開時校正轉動造成的偏移
   try { canvas.setPointerCapture(e.pointerId); } catch { /* 忽略 */ }
 });
 canvas.addEventListener('pointermove', (e) => {
   if (!gesture || e.pointerId !== gesture.id) return;
   gesture.lastX = e.clientX; gesture.lastY = e.clientY;
   // 即時預覽：照目前的滑動方向，誰會接到球
-  const a = state === 'play' ? classifySwipe(compensateStartX(gesture.x, gesture), gesture.y, e.clientX, e.clientY) : '';
-  showAim(a.startsWith('pass:') ? a.slice(5) : null);
+  const a = state === 'play' ? classifySwipe(compensateStartX(gesture.x, gesture), gesture.y, e.clientX, e.clientY) : null;
+  showAim(a && a.startsWith('pass:') ? a.slice(5) : null);
 });
 function showAim(role) { for (const [k, p] of Object.entries(players)) p.aim.visible = k === role; }
-// 被瀏覽器取消時：如果手指幾乎沒動，計時器照樣可以判長按；只清掉「放開」要用的資料
-canvas.addEventListener('pointercancel', () => { showAim(null); if (gesture) gesture.cancelled = true; });
+canvas.addEventListener('pointercancel', () => { showAim(null); gesture = null; });
 canvas.addEventListener('pointerup', (e) => {
   showAim(null);
-  if (gesture) clearTimeout(gesture.timer);
-  if (state !== 'play' || !gesture || e.pointerId !== gesture.id || gesture.rep !== rep || gesture.cancelled) { gesture = null; return; }
+  if (state !== 'play' || !gesture || e.pointerId !== gesture.id || gesture.rep !== rep) { gesture = null; return; }
   const action = classifySwipe(compensateStartX(gesture.x, gesture), gesture.y, e.clientX, e.clientY);
   const t0 = gesture.t;  // 以手指按下的時間計算反應時間
   gesture = null;
-  decide(action, t0);
+  if (action) decide(action, t0); // 點在空地上不做任何事
 });
+// 「投」「切」按鈕：按下那一刻就決定（決策時間以按下為準）
+for (const [id, act] of [['btn-shoot', 'shoot'], ['btn-drive', 'drive']]) {
+  $(id).addEventListener('pointerdown', (e) => {
+    e.preventDefault(); e.stopPropagation();
+    if (state === 'play') decide(act, e.timeStamp);
+  });
+}
 const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 
 // 轉頭模式下，手指按著時手機可能在轉：把按下那一刻的起點，換算到目前畫面上的位置（同一個看出去的方向）
@@ -559,10 +580,10 @@ function compensateStartX(sx, g) {
   return half + Math.tan(ang2) / tanHalfH * half;
 }
 
-// 手勢判定：點一下＝自己出手；滑（任何方向）＝傳球（長按切入在 pointerdown 的計時器處理）
+// 手勢判定：點在隊友身上或往隊友滑＝傳球；點在空地上＝null（不做事）
 function classifySwipe(sx, sy, ex, ey) {
   const dx = ex - sx, dy = ey - sy;
-  if (Math.hypot(dx, dy) < SWIPE_MIN) return 'shoot';
+  const isTap = Math.hypot(dx, dy) < SWIPE_MIN;
   // 方向從手指按下的位置算起：手指從哪裡開始、往哪個隊友滑，就傳給他。方向跟著畫面；
   // 不在畫面裡的隊友，往他那一側的螢幕邊緣滑
   const sw = Math.atan2(dy, dx);
@@ -577,7 +598,8 @@ function classifySwipe(sx, sy, ex, ey) {
     const dEnd = Math.hypot(ex - body.x, ey - body.y);
     if (dEnd < onDist) { onDist = dEnd; onTarget = 'pass:' + key; }
   }
-  return onTarget || best || 'shoot';
+  if (isTap) return onTarget; // 點一下：只有點在隊友身上才傳
+  return onTarget || best;
 }
 function toScreen(p, h) {
   // 鏡頭後方的隊友投影會翻轉；改用鏡頭座標判斷他在左邊還是右邊，放到該側螢幕外面
@@ -806,6 +828,8 @@ function frame(now) {
       // 時間條與逾時
       const win = cfg().window * (PRESSURE[rep.sc.pressure] || 1);
       const since = simT - rep.onset;
+      $('phase').textContent = phaseText(rep.sc);
+      $('phase').classList.toggle('hidden', since >= 0);
       if (since >= 0) {
         $('timer').classList.add('live');
         $('timer-fill').style.transform = `scaleX(${Math.max(0, 1 - since / win)})`;
@@ -831,7 +855,7 @@ function frame(now) {
     // 動態瞄準：手指按著時，每一格都用最新的隊友位置與手機轉動重算誰會接球（不只在手指移動時）
     if (state === 'play' && gesture && gesture.lastX != null && Math.hypot(gesture.lastX - gesture.x, gesture.lastY - gesture.y) >= SWIPE_MIN) {
       const a = classifySwipe(compensateStartX(gesture.x, gesture), gesture.y, gesture.lastX, gesture.lastY);
-      showAim(a.startsWith('pass:') ? a.slice(5) : null);
+      showAim(a && a.startsWith('pass:') ? a.slice(5) : null);
     }
   } else {
     // 首頁背景：慢慢環繞球場
@@ -853,7 +877,11 @@ ball.position.set(players.PG.pos.x, 1, players.PG.pos.z);
 requestAnimationFrame(frame);
 
 // ---------- 介面 ----------
+// 練習主題選單
+$('topic').innerHTML = TOPICS.map((tp) => `<option value="${tp.id}" ${tp.disabled ? 'disabled' : ''}>${tp.name}</option>`).join('');
+$('topic').addEventListener('change', (e) => { store.topic = e.target.value; save(store); });
 function refreshHome() {
+  $('topic').value = store.topic || 'all';
   for (const b of $('diff').children) b.classList.toggle('on', b.dataset.v === store.difficulty);
   for (const b of $('viewmode').children) b.classList.toggle('on', b.dataset.v === store.view);
   $('occl').checked = !!store.occlusion;
@@ -897,6 +925,11 @@ $('btn-calib').addEventListener('click', () => startCalibration(false));
 $('btn-help').addEventListener('click', () => show('help'));
 $('btn-next').addEventListener('click', advanceUnit);
 $('btn-again').addEventListener('click', startSession);
+$('btn-why').addEventListener('click', () => {
+  const more = $('res-more');
+  more.classList.toggle('hidden');
+  $('btn-why').textContent = more.classList.contains('hidden') ? '看解說' : '收起解說';
+});
 $('btn-replay').addEventListener('click', () => {
   // 從頭重播整段（不含傳球），配合俯視視角看清楚防守怎麼動
   simT = rep.tStart;
