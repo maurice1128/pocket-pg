@@ -7,10 +7,20 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
 
+// 防守站姿與腳步的依據（docs/tactics_audit.md「防守腳步的畫法」）：
+//   ASEP p.94：雙腳稍寬於肩、前後錯開，前腳（lead foot）在對手外側、後腳對準對手身體中線；膝蓋彎、背打直、頭在支撐面上方。
+//   NBA Coaches Playbook p.232–233（Fratello）：雙腳不超過肩寬，後腳腳尖對齊前腳前腳掌；像要坐椅子；
+//   「step and slide」：往哪邊就先用那一側的腳跨一步，另一腳滑過來，兩腳不併攏、不交叉；前腳那一側的手舉高，後手守傳球路線。
+//   ASEP p.95–96：第一步要短而快，用後腳蹬地。數值（寬度、步長、時間）書上沒給，都是假設。
 const P = {
-  STANCE_HALF_WIDTH: 0.30,   // 假設：防守站姿雙腳中心距 0.60 m
-  STANCE_STAGGER: 0.06,      // 假設：左腳略前（m）
+  STANCE_HALF_WIDTH: 0.25,   // 假設：雙腳中心距 0.50 m（ASEP「稍寬於肩」與 Fratello「不超過肩寬」之間）
+  STANCE_STAGGER: 0.08,      // 假設：前腳比後腳前 0.08 m（Fratello：後腳腳尖對齊前腳前腳掌，約等於前腳掌到腳尖的長度）
   TOE_OUT: 0.18,             // 假設：腳尖外開約 10°（rad）
+  SWING_MIN: 0.11, SWING_MAX: 0.24, // 假設：一步騰空時間（秒）
+  SLIDE_LIFT: 0.025,         // 假設：滑步時腳貼地（m）
+  STEP_REACH: 0.5,           // 假設：落腳點離站姿位置最遠（m）
+  IDLE_ADJUST: 0.09,         // 假設：站著時腳偏離站姿位置超過這個距離才補一步（m）
+  MIN_FEET_GAP: 0.30,        // 假設：滑步時兩腳中心最近距離（不併腳）（m）
   DROP_IDLE: 0.17,           // 假設：防守站姿骨盆下降（m）
   DROP_IDLE_OFF: 0.06,       // 假設：進攻球員站著時骨盆下降（m）
   DROP_BACK: 0.14, DROP_SIDE: 0.18, DROP_RUN: 0.06, // 假設：後撤／滑步／往前衝的骨盆下降（m）
@@ -19,11 +29,12 @@ const P = {
   LEAN_ACC: 0.035,           // 沿用 main.js 的加速度傾斜係數
   LEAN_MAX: 0.30,
   STEP_F0: 1.8, STEP_FK: 1.0, STEP_FMAX: 4.6, // 假設：步頻（步/秒）
-  SIDE_CADENCE: 1.3,         // 假設：滑步步頻倍數
-  DUTY_WALK: 0.56, DUTY_RUN: 0.40,
+  SIDE_CADENCE: 1.8, SIDE_FMAX: 7.0, // 假設：滑步步頻倍數與上限（步/秒）（ASEP p.95：短而快的步子）
+  SIDE_WIDEN: 0.3,           // 假設：滑步時前導腳多跨、後腳少滑的比例（先跨寬再滑回站姿寬度）
   LIFT_WALK: 0.07, LIFT_RUN: 0.14,
   BOB: 0.018, SWAY: 0.012, SWAY_F: 0.7,
-  KNEE_POLE_OUT: 1.0,
+  KNEE_POLE_OUT: 0.0,        // 假設：膝蓋對準腳尖方向（舊值 1.0 會變 O 型腿）（rad）
+  LEAN_BACK_DEF: 0.10,       // 假設：防守站姿減速時最多往後仰多少（ASEP p.94：背打直、頭在支撐面上方）（rad）
 };
 // 位置 → 體型（身高是假設）
 const BUILD = { PG: 'guard', O2: 'guard', X1: 'guard', X2: 'guard', O3: 'wing', O4: 'wing', X3: 'wing', X4: 'wing', O5: 'big', X5: 'big' };
@@ -32,8 +43,9 @@ const TONES = [0x8d5524, 0xc68642, 0x5c3a1e, 0xe0ac69, 0x6b4226, 0xf1c27d, 0x3d2
 let toneIdx = 0;
 
 const V = () => new THREE.Vector3(), Q = () => new THREE.Quaternion();
-const _a = V(), _b = V(), _c = V(), _d = V(), _h = V(), _k = V(), _q = Q(), _q2 = Q(), _e = new THREE.Euler();
+const _a = V(), _b = V(), _c = V(), _d = V(), _h = V(), _k = V(), _q = Q(), _q2 = Q(), _e = new THREE.Euler(), _eY = new THREE.Euler(0, 0, 0, 'YXZ');
 const clamp = (x, a, b) => Math.max(a, Math.min(b, x));
+const angDiff = (a, b) => Math.atan2(Math.sin(a - b), Math.cos(a - b));
 const sstep = (a, b, x) => { const t = clamp((x - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
 const lerp = THREE.MathUtils.lerp;
 
@@ -129,7 +141,18 @@ class BodyAnimator {
     }));
     this.holder.updateMatrixWorld(true);
     this.ankleH = this.bones.left_ankle.getWorldPosition(V()).y; // 綁定姿勢的踝關節高度
-    this.phase = Math.random(); this.vLocal = V(); this.accLocal = V();
+    this.phase = Math.random(); this.vLocal = V(); this.accLocal = V(); this.vWorld = V();
+    this.lead = 1;      // 防守前腳：1＝左腳（+X）在前，-1＝右腳在前（main.js 依題目與鏡像設定）
+    this.feet = null;   // 每隻腳踩在地上的世界座標；第一次 update 時放到站姿位置
+    this.stepClock = 9; this.lastFoot = 1;
+  }
+
+  // 瞬間移位（新題開場）後，腳直接放回站姿位置
+  reset() { this.feet = null; this.stepClock = 9; this.vLocal.set(0, 0, 0); this.vWorld.set(0, 0, 0); }
+
+  // 站姿時這隻腳該在的位置（holder 座標）
+  footHome(L, hw, stagger, out) {
+    return out.set(L.side * hw, this.ankleH, (L.side === this.lead ? 0.5 : -0.5) * stagger);
   }
 
   // 位置由 main.js 的 root 決定（holder 是 root 的子物件）；這裡只轉向與擺姿勢
@@ -145,20 +168,22 @@ class BodyAnimator {
     const dirF = speed > 1e-3 ? v.z / speed : 0, dirL = speed > 1e-3 ? v.x / speed : 0;
     const wFwd = moving * Math.max(0, dirF) ** 2, wBack = moving * Math.max(0, -dirF) ** 2, wSide = moving * dirL * dirL;
     const wIdle = 1 - moving, wRun = wFwd * sstep(1.2, 3.0, speed);
-    const stepF = Math.min(P.STEP_FMAX, P.STEP_F0 + P.STEP_FK * speed) * (1 + (P.SIDE_CADENCE - 1) * wSide);
+    const baseF = Math.min(P.STEP_FMAX, P.STEP_F0 + P.STEP_FK * speed);
+    const stepF = lerp(baseF, Math.min(P.SIDE_FMAX, baseF * P.SIDE_CADENCE), wSide);
     const cycF = stepF / 2;
-    this.phase = (this.phase + dt * cycF * moving) % 1;
-    const duty = lerp(P.DUTY_WALK, P.DUTY_RUN, wRun);
-    const lift = lerp(P.LIFT_WALK, P.LIFT_RUN, wRun) * moving;
-    const strideX = v.x / cycF * duty, strideZ = v.z / cycF * duty;
+    this.phase = (this.phase + dt * cycF * moving) % 1; // 只給跑步擺臂用
+    const Ts = 1 / stepF;                                // 兩次落地之間的時間
+    const swingT = clamp(Ts * lerp(0.85, 1.2, wRun), P.SWING_MIN, P.SWING_MAX);
+    const stanceT = Math.max(0.05, 2 * Ts - swingT);
+    const lift = lerp(lerp(P.LIFT_WALK, P.SLIDE_LIFT, wSide), P.LIFT_RUN, wRun);
     const t = performance.now() / 1000;
     const idleDrop = this.defender ? P.DROP_IDLE : P.DROP_IDLE_OFF;
     const drop = idleDrop * wIdle + P.DROP_BACK * wBack + P.DROP_SIDE * wSide + lerp(P.DROP_BACK, P.DROP_RUN, sstep(1.2, 3.0, speed)) * wFwd;
-    const bob = -P.BOB * moving * Math.cos(this.phase * 4 * Math.PI);
+    const bob = -P.BOB * moving * Math.cos(2 * Math.PI * Math.min(1, this.stepClock / Ts));
     const sway = P.SWAY * wIdle * Math.sin(t * 2 * Math.PI * P.SWAY_F);
     B.pelvis.position.set(this.pelvisRest.x + sway, this.pelvisRest.y - drop + bob, this.pelvisRest.z - P.HIP_BACK * (1 - wRun) * (this.defender ? 1 : 0.4));
     let lean = lerp(this.defender ? P.LEAN_IDLE : P.LEAN_IDLE_OFF, P.LEAN_RUN, wRun);
-    const accPitch = clamp(this.accLocal.z * P.LEAN_ACC, -P.LEAN_MAX, P.LEAN_MAX);
+    const accPitch = clamp(this.accLocal.z * P.LEAN_ACC, this.defender ? -P.LEAN_BACK_DEF : -P.LEAN_MAX, P.LEAN_MAX);
     const accRoll = clamp(this.accLocal.x * P.LEAN_ACC, -P.LEAN_MAX, P.LEAN_MAX);
     lean += accPitch;
     B.pelvis.quaternion.setFromEuler(_e.set(lean * 0.35, 0, 0));
@@ -167,28 +192,72 @@ class BodyAnimator {
     B.head.quaternion.setFromEuler(_e.set(-lean * 0.6, 0, accRoll * 0.4));
     H.updateMatrixWorld(true);
     const hq = H.getWorldQuaternion(_q).clone();
-    for (const L of this.legs) {
-      const p = (this.phase + L.phaseOff) % 1;
-      let ox, oz, oy = 0, pitch = 0;
-      if (p < duty) { const u = 0.5 - p / duty; ox = strideX * u; oz = strideZ * u; }
-      else { const q = (p - duty) / (1 - duty), u = -0.5 + sstep(0, 1, q); ox = strideX * u; oz = strideZ * u; oy = lift * Math.sin(Math.PI * q); pitch = 0.3 * Math.sin(Math.PI * q) * (wBack - wRun * 0.5); }
-      const lim = P.STANCE_HALF_WIDTH - 0.13; ox = clamp(ox, -lim - 0.6 * wFwd, lim + 0.6 * wFwd);
-      const hw = lerp(this.defender ? P.STANCE_HALF_WIDTH : 0.17, 0.13, wRun);
-      const target = _c.set(L.side * hw + ox, this.ankleH + oy, (L.side > 0 ? P.STANCE_STAGGER : 0) * (1 - wRun) + oz).applyMatrix4(H.matrixWorld);
-      const pole = _d.set(L.side * P.KNEE_POLE_OUT * (1 - wRun), 0, 1).normalize().applyQuaternion(hq);
-      this.solveLeg(L, target, pole);
-      const footQ = _q2.copy(hq).multiply(new THREE.Quaternion().setFromEuler(_e.set(pitch, L.side * P.TOE_OUT * (1 - wRun), 0)));
+    // 腳：踩住地面不滑動，該換位置時才跨一步。側移是 step and slide：先動移動方向那一側的腳，
+    // 另一腳再滑過來，兩腳不併攏、不交叉（Fratello p.233；ASEP p.95–96）
+    this.vWorld.lerp(_c.set(vel.x, 0, vel.z), 1 - Math.exp(-12 * dt));
+    const hw = lerp(this.defender ? P.STANCE_HALF_WIDTH : 0.17, 0.13, wRun);
+    const stagger = (this.defender ? P.STANCE_STAGGER : 0.03) * (1 - wRun);
+    const homes = this.legs.map((L) => this.footHome(L, hw, stagger, V()).applyMatrix4(H.matrixWorld));
+    const toeYaw = (L) => heading + L.side * P.TOE_OUT * (1 - wRun);
+    if (!this.feet) this.feet = this.legs.map((L, i) => ({ pos: homes[i].clone(), from: V(), yaw: toeYaw(L), yaw0: 0, t: -1 }));
+    const F = this.feet;
+    const lat = _h.set(Math.cos(heading), 0, -Math.sin(heading)); // 身體左方（holder +X）
+    // 落腳點＝站姿位置＋落地前身體會移動的距離＋半個支撐期（腳落在身體前方、支撐期中間剛好在身體下面）
+    const landAt = (i, rem, out) => {
+      const o = out.copy(this.vWorld).multiplyScalar(rem + stanceT * 0.5);
+      // 滑步：往移動方向那隻腳多跨一點、後腳少滑一點，兩腳間距在「站姿寬」和「跨寬」之間變化，不會併在一起
+      o.addScaledVector(lat, v.x * Ts * P.SIDE_WIDEN * (this.legs[i].side * v.x > 0 ? 1 : -1));
+      if (o.length() > P.STEP_REACH) o.setLength(P.STEP_REACH);
+      return o.add(homes[i]);
+    };
+    this.stepClock += dt;
+    const err = F.map((f, i) => (f.t >= 0 ? 0 : Math.hypot(f.pos.x - homes[i].x, f.pos.z - homes[i].z) + 0.25 * Math.abs(angDiff(toeYaw(this.legs[i]), f.yaw))));
+    const sw = F.findIndex((f) => f.t >= 0);
+    const busy = sw >= 0 && !(wRun > 0.5 && F[sw].t > 0.45); // 跑步時有騰空期，前一步過半就能出下一步
+    const want = moving > 0.3 ? this.stepClock >= Ts : Math.max(err[0], err[1]) > P.IDLE_ADJUST;
+    if (!busy && want) {
+      let i;
+      if (this.stepClock > 2.5 * Ts) {
+        // 從靜止起步：側移先動移動方向那一側的腳，其他方向先動離站姿最遠的腳
+        i = wSide > 0.5 ? this.legs.findIndex((L) => L.side * v.x > 0) : (err[0] >= err[1] ? 0 : 1);
+        if (i < 0) i = 0;
+      } else i = 1 - this.lastFoot;
+      if (F[i].t < 0) { F[i].t = 0; F[i].from.copy(F[i].pos); F[i].yaw0 = F[i].yaw; this.lastFoot = i; this.stepClock = 0; }
+    }
+    for (let i = 0; i < 2; i++) {
+      const f = F[i], L = this.legs[i];
+      let oy = 0, pitch = 0;
+      if (f.t >= 0) {
+        f.t = Math.min(1, f.t + dt / swingT);
+        const to = landAt(i, (1 - f.t) * swingT, _k);
+        // 不併腳：落點和另一腳在身體左右方向至少隔 MIN_FEET_GAP
+        const o = F[1 - i].pos, gap = P.MIN_FEET_GAP * (1 - wRun);
+        const sep = ((to.x - o.x) * lat.x + (to.z - o.z) * lat.z) * L.side;
+        if (sep < gap) to.addScaledVector(lat, (gap - sep) * L.side);
+        const u = sstep(0, 1, f.t);
+        f.pos.lerpVectors(f.from, to, u);
+        f.yaw = f.yaw0 + angDiff(toeYaw(L), f.yaw0) * u;
+        oy = lift * Math.sin(Math.PI * f.t);
+        pitch = 0.3 * Math.sin(Math.PI * f.t) * (wBack - wRun * 0.5);
+        if (f.t >= 1) f.t = -1;
+      }
+      const target = _c.set(f.pos.x, this.ankleH + oy, f.pos.z);
+      const py = f.yaw + L.side * P.KNEE_POLE_OUT * (1 - wRun); // 膝蓋跟著腳尖方向
+      this.solveLeg(L, target, _d.set(Math.sin(py), 0, Math.cos(py)));
+      const footQ = _q2.setFromEuler(_eY.set(pitch, f.yaw, 0));
       const kq = L.knee.getWorldQuaternion(new THREE.Quaternion());
       L.ankle.quaternion.copy(kq.invert().multiply(footQ));
     }
-    // 手臂：防守者一手高一手低（假設）；進攻球員手自然垂下；跑步時擺臂
+    // 手臂：防守者前腳那一側的手舉高、另一手在側邊守傳球路線（Fratello p.233；ASEP p.95）；
+    // 進攻球員手自然垂下；跑步時擺臂。角度是假設
     const swing = Math.sin(this.phase * 2 * Math.PI);
     for (const A of this.arms) {
       const sd = A.side;
       let up, fo;
       if (this.defender) {
-        up = sd > 0 ? _a.set(0.80, -0.30, 0.50) : _a.set(-0.80, -0.50, 0.40);
-        fo = sd > 0 ? _b.set(0.25, 0.75, 0.55) : _b.set(-0.35, -0.05, 0.95);
+        const hi = sd === this.lead;
+        up = hi ? _a.set(sd * 0.6, -0.25, 0.75) : _a.set(sd * 0.8, -0.5, 0.35);
+        fo = hi ? _b.set(sd * 0.15, 0.8, 0.55) : _b.set(sd * 0.45, -0.05, 0.9);
       } else {
         up = _a.set(sd * 0.25, -0.95, 0.15);
         fo = _b.set(sd * 0.1, -0.6, 0.8);

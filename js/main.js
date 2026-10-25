@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0819';
-import { setupLook, floorMaterials, buildArena, buildHoop, makeBall, makeBody, animateRig } from './art.js?v=0819';
+import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0820';
+import { setupLook, floorMaterials, buildArena, buildHoop, makeBall, makeBody, animateRig } from './art.js?v=0820';
 
 // ---------- 設定 ----------
 // levels：該難度會出的題目等級（初階 → 進階的分級課程）
@@ -165,7 +165,7 @@ const inPlay = (r) => store.players5 !== false || !EXTRA_ROLES.includes(r);
       for (const m of p.parts) m.visible = false;
     }
   };
-  const anny = () => import('./body.js?v=0819').then((m) => m.init(HI)).then(swap)
+  const anny = () => import('./body.js?v=0820').then((m) => m.init(HI)).then(swap)
     .catch((e) => console.warn('真人身體載入失敗，維持低多邊形人形', e));
   if (mode === 'smplx') import('../body/smplx_body.js').then((m) => m.init()).then(swap).catch(anny);
   else if (mode !== '0') anny();
@@ -385,6 +385,9 @@ function nextRep() {
   for (const [k, p] of Object.entries(players)) {
     p.path = rep.paths[k];
     if (!cont) samplePath(p.path, rep.tStart, p.pos);
+    // 防守前腳（lead foot）：題目可寫 lead: { X1: 'right' }（防守者自己的腳，未鏡像前），沒寫就左腳在前；鏡像時左右對調
+    if (p.body && p.defender) p.body.lead = (rep.sc.lead && rep.sc.lead[k] === 'right' ? -1 : 1) * rep.mirror;
+    if (p.body && !cont && p.body.reset) p.body.reset(); // 本機 SMPL-X 版沒有 reset
     if (cont) { p.root.visible = inPlay(k); p.ring.visible = false; continue; } // 接續：保留目前位置、速度與朝向
     p.vel.set(0, 0, 0); p.acc.set(0, 0, 0);
     p.root.visible = inPlay(k);
