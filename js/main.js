@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0816';
+import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0817';
 
 // ---------- 設定 ----------
 // levels：該難度會出的題目等級（初階 → 進階的分級課程）
@@ -19,7 +19,7 @@ const TOPICS = [
   { id: 'drive', name: '切入分球', phase: '你正在切入…', match: (s) => s.id.startsWith('drive_') || s.id === 'noadv_drive_wall' },
   { id: 'noadv', name: '沒有優勢：轉移球', phase: '外圍持球…', match: (s) => s.answer === 'reset' || s.id.startsWith('noadv_') },
   { id: 'offball', name: '無球：後門', phase: '觀察隊友…', match: (s) => s.id.startsWith('backdoor') },
-  { id: 'dho', name: '手遞手（製作中）', match: () => false, disabled: true },
+  { id: 'dho', name: '手遞手（DHO）', phase: '手遞手…', match: (s) => s.id.startsWith('dho_') },
 ];
 const phaseText = (sc) => (TOPICS.find((tp) => tp.id !== 'all' && tp.match(sc)) || {}).phase || '戰術進行中…';
 // 時間壓力：外圍觀察可以慢慢看（寬鬆），關鍵瞬間才緊迫。乘在難度的決策窗上
@@ -810,12 +810,16 @@ function updateBall(dt, t) {
     for (let k = 0; k < tl.length; k++) if (tl[k][0] <= t) i = k;
     const holder = i >= 0 ? tl[i][1] : (rep.sc.ballStart || 'PG');
     const prev = i > 0 ? tl[i - 1][1] : (rep.sc.ballStart || 'PG');
-    if (i >= 0 && prev !== holder && t - tl[i][0] < 0.45) {
+    // 第三欄 'hand'＝手遞手：0.2 秒、幾乎不拋高（一般傳球 0.45 秒）
+    const hand = i >= 0 && tl[i][2] === 'hand';
+    const dur = hand ? 0.2 : 0.45;
+    if (i >= 0 && prev !== holder && t - tl[i][0] < dur) {
       // 傳球飛行中
-      const u = (t - tl[i][0]) / 0.45;
+      const u = (t - tl[i][0]) / dur;
       const fromP = prev === 'PG' && firstPerson() ? camera.position.clone().setY(1.0) : players[prev].pos.clone().setY(1.2);
-      ball.position.lerpVectors(fromP, players[holder].pos.clone().setY(1.2), u);
-      ball.position.y += Math.sin(u * Math.PI) * 0.6;
+      const toP = holder === 'PG' && firstPerson() ? camera.position.clone().setY(1.0) : players[holder].pos.clone().setY(1.2);
+      ball.position.lerpVectors(fromP, toP, u);
+      ball.position.y += Math.sin(u * Math.PI) * (hand ? 0.05 : 0.6);
       setArmsVisible(false);
       return;
     }
