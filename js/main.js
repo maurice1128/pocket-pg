@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0818';
-import { setupLook, floorMaterials, buildArena, buildHoop, makeBall, makeBody, animateRig } from './art.js?v=0818';
+import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0819';
+import { setupLook, floorMaterials, buildArena, buildHoop, makeBall, makeBody, animateRig } from './art.js?v=0819';
 
 // ---------- 設定 ----------
 // levels：該難度會出的題目等級（初階 → 進階的分級課程）
@@ -152,21 +152,23 @@ const NUMBERS = { PG: 1, O2: 12, O3: 3, O4: 24, O5: 15, X1: 4, X2: 21, X3: 7, X4
 for (const r of OFFENSE) players[r] = makePlayer(r === 'PG' ? COLORS.pg : COLORS.offense, false, NUMBERS[r]);
 for (const r of DEFENSE) players[r] = makePlayer(COLORS.defense, true, NUMBERS[r]);
 const inPlay = (r) => store.players5 !== false || !EXTRA_ROLES.includes(r);
-// 真人身體外掛（本機版）：?body=1 開啟、?body=0 關閉（記在這支手機）。外掛檔（SMPL-X）因授權只放在本機伺服器的 /body/，
-// 公開網站沒有這個檔，就維持膠囊人
+// 真人身體：預設用公開版（Anny，CC0，js/body.js＋assets/）。?body=0 用低多邊形人形；
+// ?body=smplx 用本機 SMPL-X 版（授權限非商用，檔案只在本機伺服器的 /body/，公開網站沒有）。選擇記在這支手機
 {
   const q = new URLSearchParams(location.search).get('body');
-  try { if (q === '1' || q === '0') localStorage.setItem('pp_body', q); } catch { /* 忽略 */ }
-  let on = q === '1';
-  try { on = on || (q !== '0' && localStorage.getItem('pp_body') === '1'); } catch { /* 忽略 */ }
-  if (on) {
-    import('../body/smplx_body.js').then((m) => m.init()).then((plugin) => {
-      for (const [r, p] of Object.entries(players)) {
-        p.body = plugin.attach(p, r, p.color);
-        for (const m of p.parts) m.visible = false;
-      }
-    }).catch((e) => console.warn('真人身體外掛載入失敗，維持膠囊人', e));
-  }
+  try { if (['0', '1', 'smplx'].includes(q)) localStorage.setItem('pp_body2', q); } catch { /* 忽略 */ }
+  let mode = q;
+  try { mode = mode || localStorage.getItem('pp_body2'); } catch { /* 忽略 */ }
+  const swap = (plugin) => {
+    for (const [r, p] of Object.entries(players)) {
+      p.body = plugin.attach(p, r, p.color, NUMBERS[r]);
+      for (const m of p.parts) m.visible = false;
+    }
+  };
+  const anny = () => import('./body.js?v=0819').then((m) => m.init(HI)).then(swap)
+    .catch((e) => console.warn('真人身體載入失敗，維持低多邊形人形', e));
+  if (mode === 'smplx') import('../body/smplx_body.js').then((m) => m.init()).then(swap).catch(anny);
+  else if (mode !== '0') anny();
 }
 // 除錯用：__pp.play('題目id') 直接播放某一題
 window.__pp = {
