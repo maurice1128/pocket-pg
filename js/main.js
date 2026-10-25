@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0817';
+import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0818';
+import { setupLook, floorMaterials, buildArena, buildHoop, makeBall, makeBody, animateRig } from './art.js?v=0818';
 
 // ---------- 設定 ----------
 // levels：該難度會出的題目等級（初階 → 進階的分級課程）
@@ -42,33 +43,34 @@ const canvas = document.getElementById('view');
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x23262c);
 const camera = new THREE.PerspectiveCamera(60, 1, 0.1, 100);
-
-scene.add(new THREE.HemisphereLight(0xffffff, 0x444444, 1.6));
-const sun = new THREE.DirectionalLight(0xffffff, 1.4);
-sun.position.set(4, 10, 8);
-scene.add(sun);
+// 畫質一律精緻：陰影、環境反光、觀眾（D-38；使用者：「不要省電模式啊」）。art.js 保留 hi 參數，之後要降畫質只改這裡
+const HI = true;
+setupLook(renderer, scene, HI);
 
 const mat = (color) => new THREE.MeshStandardMaterial({ color, roughness: 0.85, flatShading: true });
 
 buildCourt();
 
 function buildCourt() {
-  const floor = new THREE.Mesh(new THREE.PlaneGeometry(15, 14), mat(COLORS.court));
+  // 木地板、禁區、界外的貼圖與球館在 art.js（D-38）
+  const fm = floorMaterials(HI);
+  const floor = new THREE.Mesh(new THREE.PlaneGeometry(15, 14), fm.court);
   floor.rotation.x = -Math.PI / 2;
   floor.position.set(0, 0, 7);
+  floor.receiveShadow = true;
   scene.add(floor);
-  // 場外
-  // 場外地板用較深的木色，第一人稱時才看得出是地板而不是牆
-  const apron = new THREE.Mesh(new THREE.PlaneGeometry(40, 40), mat(0x8c6a48));
+  // 場外：界外 2 m 寬的深色地板，第一人稱時才看得出是地板而不是牆
+  const apron = new THREE.Mesh(new THREE.PlaneGeometry(19, 19), fm.apron);
   apron.rotation.x = -Math.PI / 2;
-  apron.position.set(0, -0.01, 7);
+  apron.position.set(0, -0.01, 6.5);
+  apron.receiveShadow = true;
   scene.add(apron);
   // 禁區（FIBA 4.9 x 5.8）
-  const paint = new THREE.Mesh(new THREE.PlaneGeometry(4.9, 5.8), mat(COLORS.paint));
+  const paint = new THREE.Mesh(new THREE.PlaneGeometry(4.9, 5.8), fm.paint);
   paint.rotation.x = -Math.PI / 2;
   paint.position.set(0, 0.002, 2.9);
+  paint.receiveShadow = true;
   scene.add(paint);
 
   const lineMat = new THREE.MeshBasicMaterial({ color: COLORS.line });
@@ -100,46 +102,24 @@ function buildCourt() {
   arc(0, 1.575, 6.75, -aMax, aMax, 60);
   arc(0, 1.575, 1.25, -Math.PI / 2, Math.PI / 2, 20);              // 合理衝撞區
 
-  // 籃架
-  const board = new THREE.Mesh(new THREE.BoxGeometry(1.8, 1.05, 0.05), new THREE.MeshStandardMaterial({ color: 0xffffff, transparent: true, opacity: 0.55 }));
-  board.position.set(0, 3.35, 1.2);
-  scene.add(board);
-  const rim = new THREE.Mesh(new THREE.TorusGeometry(0.225, 0.02, 6, 16), mat(0xff5a1f));
-  rim.rotation.x = Math.PI / 2;
-  rim.position.copy(BASKET);
-  scene.add(rim);
-  const pole = new THREE.Mesh(new THREE.BoxGeometry(0.15, 3.4, 0.15), mat(0x555a63));
-  pole.position.set(0, 1.7, -0.6);
-  scene.add(pole);
+  buildHoop(scene, BASKET, HI);
+  buildArena(scene, HI);
 }
 
 // ---------- 球員 ----------
-function makePlayer(color, defender) {
+function makePlayer(color, defender, number) {
   const root = new THREE.Group();
   const tilt = new THREE.Group();
   const yaw = new THREE.Group();
   root.add(tilt); tilt.add(yaw);
-  const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.27, 1.05, 2, 6), mat(color));
-  body.position.y = 0.27 + 0.525 + 0.08;
-  yaw.add(body);
-  const head = new THREE.Mesh(new THREE.IcosahedronGeometry(0.16, 0), mat(color));
-  head.position.y = 1.72;
-  yaw.add(head);
-  // 胸口朝向箭頭（判斷髖部／身體朝向）
-  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.12, 0.32, 4), mat(0xffffff));
+  // 低多邊形人形（軀幹、短褲、手腳、號碼；art.js）。佔地仍是半徑約 0.27 m，穿模檢查的 0.58 m 不變
+  const fig = makeBody(yaw, color, defender, number, HI);
+  // 胸口朝向箭頭（判斷髖部／身體朝向）：縮小、貼在腰前
+  const nose = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.2, 4), mat(0xffffff));
   nose.rotation.x = Math.PI / 2;
-  nose.position.set(0, 1.05, 0.3);
+  nose.position.set(0, defender ? 0.98 : 1.06, 0.2);
   yaw.add(nose);
-  // 雙腳
-  const footGeo = new THREE.BoxGeometry(0.12, 0.08, 0.26);
-  const spread = defender ? 0.3 : 0.16;
-  const parts = [body, head, nose];
-  for (const s of [-1, 1]) {
-    const f = new THREE.Mesh(footGeo, mat(0x22252b));
-    f.position.set(s * spread, 0.04, 0.04);
-    yaw.add(f);
-    parts.push(f);
-  }
+  const parts = [...fig.parts, nose];
   // 重心投影點（不跟著傾斜，留在地上）
   const com = new THREE.Mesh(new THREE.CircleGeometry(0.13, 12), new THREE.MeshBasicMaterial({ color: 0x111111, transparent: true, opacity: 0.55 }));
   com.rotation.x = -Math.PI / 2;
@@ -158,9 +138,9 @@ function makePlayer(color, defender) {
   aim.visible = false;
   root.add(aim);
   scene.add(root);
-  const fadeMats = [body.material, head.material, nose.material];
+  const fadeMats = [...fig.fadeMats, nose.material];
   for (const m of fadeMats) m.transparent = true;
-  return { root, tilt, yaw, com, ring, aim, fadeMats, parts, color, body: null, pos: new THREE.Vector3(), vel: new THREE.Vector3(), acc: new THREE.Vector3(), path: null, defender, faceMode: 'ball', heading: 0 };
+  return { root, tilt, yaw, com, ring, aim, fadeMats, parts, rig: fig.rig, color, body: null, pos: new THREE.Vector3(), vel: new THREE.Vector3(), acc: new THREE.Vector3(), path: null, defender, faceMode: 'ball', heading: 0 };
 }
 
 // 5v5：PG＝持球的你；O2 強側、O3 弱側底角、O4 弱側側翼、O5 掩護者／大個子；X 是各自的防守者
@@ -168,8 +148,9 @@ const OFFENSE = ['PG', 'O2', 'O3', 'O4', 'O5'];
 const DEFENSE = ['X1', 'X2', 'X3', 'X4', 'X5'];
 const EXTRA_ROLES = ['O2', 'O4', 'X2', 'X4']; // 3v3 教學模式時隱藏
 const players = {};
-for (const r of OFFENSE) players[r] = makePlayer(r === 'PG' ? COLORS.pg : COLORS.offense, false);
-for (const r of DEFENSE) players[r] = makePlayer(COLORS.defense, true);
+const NUMBERS = { PG: 1, O2: 12, O3: 3, O4: 24, O5: 15, X1: 4, X2: 21, X3: 7, X4: 33, X5: 50 }; // 球衣號碼只是裝飾
+for (const r of OFFENSE) players[r] = makePlayer(r === 'PG' ? COLORS.pg : COLORS.offense, false, NUMBERS[r]);
+for (const r of DEFENSE) players[r] = makePlayer(COLORS.defense, true, NUMBERS[r]);
 const inPlay = (r) => store.players5 !== false || !EXTRA_ROLES.includes(r);
 // 真人身體外掛（本機版）：?body=1 開啟、?body=0 關閉（記在這支手機）。外掛檔（SMPL-X）因授權只放在本機伺服器的 /body/，
 // 公開網站沒有這個檔，就維持膠囊人
@@ -267,7 +248,7 @@ function placeArm(arm, elbow, wrist) {
 }
 function setArmsVisible(v) { for (const a of Object.values(arms)) for (const m of Object.values(a)) m.visible = v; }
 setArmsVisible(false);
-const ball = new THREE.Mesh(new THREE.IcosahedronGeometry(0.12, 1), mat(COLORS.ball));
+const ball = makeBall(HI);
 scene.add(ball);
 
 function samplePath(path, t, out) {
@@ -777,6 +758,7 @@ function updatePlayers(dt, t) {
     p.heading += angDiff(target, p.heading) * (1 - Math.exp(-8 * dt));
     p.yaw.rotation.y = p.heading;
     if (p.body && dt > 0 && p.root.visible) p.body.update(dt, p.vel, p.acc, p.heading);
+    else if (!p.body && p.root.visible) animateRig(p, dt);
     // 傾斜：重心往加速方向偏
     const lean = p.acc.clone().multiplyScalar(0.035).add(p.vel.clone().multiplyScalar(0.03));
     lean.y = 0;
