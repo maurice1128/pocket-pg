@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0820';
-import { setupLook, floorMaterials, buildArena, buildHoop, makeBall, makeBody, animateRig } from './art.js?v=0820';
+import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0821';
+import { setupLook, floorMaterials, buildArena, buildHoop, makeBall, makeBody, animateRig } from './art.js?v=0821';
 
 // ---------- 設定 ----------
 // levels：該難度會出的題目等級（初階 → 進階的分級課程）
@@ -165,7 +165,7 @@ const inPlay = (r) => store.players5 !== false || !EXTRA_ROLES.includes(r);
       for (const m of p.parts) m.visible = false;
     }
   };
-  const anny = () => import('./body.js?v=0820').then((m) => m.init(HI)).then(swap)
+  const anny = () => import('./body.js?v=0821').then((m) => m.init(HI)).then(swap)
     .catch((e) => console.warn('真人身體載入失敗，維持低多邊形人形', e));
   if (mode === 'smplx') import('../body/smplx_body.js').then((m) => m.init()).then(swap).catch(anny);
   else if (mode !== '0') anny();
@@ -196,7 +196,8 @@ window.__pp = {
     for (let t = rep.tStart; t <= rep.tEnd + 0.4; t += 1 / 60) {
       updatePlayers(1 / 60, t);
       for (let i = 0; i < roles.length; i++) for (let j = i + 1; j < roles.length; j++) {
-        const d = players[roles[i]].pos.distanceTo(players[roles[j]].pos);
+        const A = players[roles[i]], B = players[roles[j]];
+        const d = tmp.copy(A.pos).add(bodyShift(A)).distanceTo(B.pos.clone().add(bodyShift(B)));
         if (d < worst.d) worst = { d, a: roles[i], b: roles[j], t: +(t - rep.onset).toFixed(2) };
       }
     }
@@ -386,14 +387,19 @@ function nextRep() {
     p.path = rep.paths[k];
     if (!cont) samplePath(p.path, rep.tStart, p.pos);
     // 防守前腳（lead foot）：題目可寫 lead: { X1: 'right' }（防守者自己的腳，未鏡像前），沒寫就左腳在前；鏡像時左右對調
-    if (p.body && p.defender) p.body.lead = (rep.sc.lead && rep.sc.lead[k] === 'right' ? -1 : 1) * rep.mirror;
-    if (p.body && !cont && p.body.reset) p.body.reset(); // 本機 SMPL-X 版沒有 reset
+    // 有指定前腳時，防守者整個人偏向前腳那一側（body.js LEAD_SHIFT）
+    if (p.body && p.defender) {
+      const lead = rep.sc.lead && rep.sc.lead[k];
+      p.body.lead = (lead === 'right' ? -1 : 1) * rep.mirror;
+      p.body.leadSet = !!lead;
+    }
     if (cont) { p.root.visible = inPlay(k); p.ring.visible = false; continue; } // 接續：保留目前位置、速度與朝向
     p.vel.set(0, 0, 0); p.acc.set(0, 0, 0);
     p.root.visible = inPlay(k);
     p.ring.visible = false;
     p.heading = Math.atan2(BASKET.x - p.pos.x, BASKET.z - p.pos.z);
     if (p.defender) p.heading = Math.atan2(players.PG.pos.x - p.pos.x, players.PG.pos.z - p.pos.z);
+    if (p.body && p.body.reset) p.body.reset(p.heading); // 本機 SMPL-X 版沒有 reset
   }
   if (!cont) separateNow();
   // 假撲的防守者要一直面向持球者（髖部不轉），真內縮會轉向跑動方向
@@ -715,11 +721,14 @@ let lastFrame = performance.now();
 // 身體不能互相穿過：兩人中心距離至少 MIN_SEP（膠囊半徑 0.27 m ×2，加一點衣服厚度）。
 // 掩護、包夾時是肩碰肩，不是重疊。
 const MIN_SEP = 0.58;
+// 身體真正的中心：防守者偏向前腳那一側時，身體不在 root 上（body.js shiftW，上一幀的值）
+const NO_SHIFT = new THREE.Vector3();
+const bodyShift = (p) => (p.body && p.body.shiftW) || NO_SHIFT;
 function separate(list) {
   for (let iter = 0; iter < 4; iter++) {
     for (let i = 0; i < list.length; i++) for (let j = i + 1; j < list.length; j++) {
-      const A = list[i].next, B = list[j].next;
-      let dx = B.x - A.x, dz = B.z - A.z;
+      const A = list[i].next, B = list[j].next, oA = bodyShift(list[i]), oB = bodyShift(list[j]);
+      let dx = B.x + oB.x - A.x - oA.x, dz = B.z + oB.z - A.z - oA.z;
       let d = Math.hypot(dx, dz);
       if (d >= MIN_SEP) continue;
       if (d < 1e-4) { dx = 1; dz = 0; d = 1e-4; } // 完全重疊時隨便選一個方向推開

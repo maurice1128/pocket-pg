@@ -6,6 +6,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/addons/utils/SkeletonUtils.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
 
 // 防守站姿與腳步的依據（docs/tactics_audit.md「防守腳步的畫法」）：
 //   ASEP p.94：雙腳稍寬於肩、前後錯開，前腳（lead foot）在對手外側、後腳對準對手身體中線；膝蓋彎、背打直、頭在支撐面上方。
@@ -35,6 +36,9 @@ const P = {
   BOB: 0.018, SWAY: 0.012, SWAY_F: 0.7,
   KNEE_POLE_OUT: 0.0,        // 假設：膝蓋對準腳尖方向（舊值 1.0 會變 O 型腿）（rad）
   LEAN_BACK_DEF: 0.10,       // 假設：防守站姿減速時最多往後仰多少（ASEP p.94：背打直、頭在支撐面上方）（rad）
+  LEAD_SHIFT: 1.0,           // 整個人往前腳那一側偏「半個站姿寬」，後腳剛好在站位中線上（ASEP p.94：後腳對準對手身體中線）；
+                             // 只有題目寫了 lead 才偏，因為這是一個會被讀的線索，不能預設亂給
+  LEG_ALPHA: 0.8,            // 假設：第一人稱淡化時，膝蓋以下至少保持這個不透明度（腳步要看得到）
 };
 // 位置 → 體型（身高是假設）
 const BUILD = { PG: 'guard', O2: 'guard', X1: 'guard', X2: 'guard', O3: 'wing', O4: 'wing', X3: 'wing', X4: 'wing', O5: 'big', X5: 'big' };
@@ -85,10 +89,33 @@ varying vec3 vBind;
   else if (head && (y > uEye + 0.045 || (z < uHeadZ - 0.035 && y > uEye - 0.035))) c = uHair;
   if (y < uAnkle + 0.13) c = vec3(0.82);                                    // 白襪
   if (y < uAnkle + 0.035) c = uShoe;
-  diffuseColor.rgb *= c;`);
+  diffuseColor.rgb *= c;
+  diffuseColor.a = max(diffuseColor.a, ${P.LEG_ALPHA.toFixed(2)} * (1.0 - smoothstep(uKnee - 0.12, uKnee + 0.04, y))); // 膝蓋以下不淡化`);
   };
   m.customProgramCacheKey = () => 'pp-body-zones';
   return m;
+}
+
+// 球鞋：Anny 的腳是赤腳，近看看得到腳趾，所以套一雙簡單的鞋（鞋身＋顏色不同的鞋底），大小照每個體型的腳量。
+// 鞋子不跟著第一人稱淡化，貼身時也看得清楚腳步。形狀是美術上的假設
+const shoeGeo = new Map();
+function shoeGeometry(w, L, hHeel) {
+  const key = [w, L, hHeel].map((v) => v.toFixed(3)).join();
+  if (shoeGeo.has(key)) return shoeGeo.get(key);
+  const upper = new RoundedBoxGeometry(w, hHeel, L, 3, 0.03);
+  const p = upper.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const t = (p.getZ(i) + L / 2) / L;                                    // 0＝腳跟，1＝腳尖
+    const y = p.getY(i) + hHeel / 2;                                       // 鞋底在 y＝0
+    p.setY(i, y * lerp(1, 0.42, sstep(0.25, 0.85, t)));                    // 鞋頭比鞋口低
+    p.setX(i, p.getX(i) * lerp(0.86, 1, sstep(0, 0.3, t)) * lerp(1, 0.78, sstep(0.7, 1, t)));
+  }
+  upper.computeVertexNormals();
+  const sole = new RoundedBoxGeometry(w + 0.01, 0.026, L + 0.012, 2, 0.012);
+  sole.translate(0, 0.013, 0.002);
+  const g = { upper, sole };
+  shoeGeo.set(key, g);
+  return g;
 }
 
 function numberTexture(n, dark) {
@@ -141,14 +168,46 @@ class BodyAnimator {
     }));
     this.holder.updateMatrixWorld(true);
     this.ankleH = this.bones.left_ankle.getWorldPosition(V()).y; // 綁定姿勢的踝關節高度
+    // 鞋子：量綁定姿勢裡腳的頂點範圍（腳踝以下），鞋子比腳大一點把腳趾包住，黏在踝骨上
+    let skin = null;
+    model.traverse((o) => { if (o.isSkinnedMesh && !skin) skin = o; });
+    const pos = skin.geometry.attributes.position;
+    const shoeMat = new THREE.MeshStandardMaterial({ color: defender ? 0x1c1c22 : 0xf2f2f2, roughness: 0.5 });
+    const soleMat = new THREE.MeshStandardMaterial({ color: defender ? 0xeeeeee : 0x2a2a2e, roughness: 0.8 });
+    for (const L of this.legs) {
+      const mn = [9, 9], mx = [-9, -9];
+      for (let i = 0; i < pos.count; i++) {
+        const x = pos.getX(i) * L.side, y = pos.getY(i), z = pos.getZ(i);
+        if (x < 0.02 || y > this.ankleH + 0.03) continue;
+        mn[0] = Math.min(mn[0], x); mx[0] = Math.max(mx[0], x); mn[1] = Math.min(mn[1], z); mx[1] = Math.max(mx[1], z);
+      }
+      const w = mx[0] - mn[0] + 0.02, len = mx[1] - mn[1] + 0.025;
+      const g = shoeGeometry(w, len, this.ankleH + 0.06); // 中筒籃球鞋：鞋口高過踝骨
+      const aw = L.ankle.getWorldPosition(V());
+      const shoe = new THREE.Group();
+      for (const [geo, m] of [[g.upper, shoeMat], [g.sole, soleMat]]) {
+        const mesh = new THREE.Mesh(geo, m);
+        mesh.castShadow = shadows;
+        shoe.add(mesh);
+      }
+      shoe.position.set(L.side * (mn[0] + mx[0]) / 2 - aw.x, -aw.y, (mn[1] + mx[1]) / 2 + 0.004 - aw.z);
+      L.ankle.add(shoe);
+    }
     this.phase = Math.random(); this.vLocal = V(); this.accLocal = V(); this.vWorld = V();
     this.lead = 1;      // 防守前腳：1＝左腳（+X）在前，-1＝右腳在前（main.js 依題目與鏡像設定）
+    this.leadSet = false; // 題目有沒有指定前腳；有才把身體偏向前腳那一側
+    this.shift = null;  // 身體往前腳那一側偏多少（m，holder +X）
+    this.shiftW = V();  // 同一個偏移的世界座標（main.js 穿模檢查用身體真正的中心）
     this.feet = null;   // 每隻腳踩在地上的世界座標；第一次 update 時放到站姿位置
     this.stepClock = 9; this.lastFoot = 1;
   }
 
-  // 瞬間移位（新題開場）後，腳直接放回站姿位置
-  reset() { this.feet = null; this.stepClock = 9; this.vLocal.set(0, 0, 0); this.vWorld.set(0, 0, 0); }
+  // 瞬間移位（新題開場）後，腳直接放回站姿位置；身體偏移依開場朝向先算好（穿模檢查第一幀就要用）
+  reset(heading = 0) {
+    this.feet = null; this.stepClock = 9; this.vLocal.set(0, 0, 0); this.vWorld.set(0, 0, 0);
+    this.shift = this.defender && this.leadSet ? this.lead * P.STANCE_HALF_WIDTH * P.LEAD_SHIFT : 0;
+    this.shiftW.set(Math.cos(heading), 0, -Math.sin(heading)).multiplyScalar(this.shift);
+  }
 
   // 站姿時這隻腳該在的位置（holder 座標）
   footHome(L, hw, stagger, out) {
@@ -190,18 +249,23 @@ class BodyAnimator {
     for (const n of ['spine1', 'spine2', 'spine3']) B[n].quaternion.setFromEuler(_e.set(lean * 0.22, 0, -accRoll * 0.33));
     B.neck.quaternion.setFromEuler(_e.set(-lean * 0.4, 0, accRoll * 0.4));
     B.head.quaternion.setFromEuler(_e.set(-lean * 0.6, 0, accRoll * 0.4));
+    const hw = lerp(this.defender ? P.STANCE_HALF_WIDTH : 0.17, 0.13, wRun);
+    const lat = _h.set(Math.cos(heading), 0, -Math.sin(heading)); // 身體左方（holder +X）
+    // 整個人偏向前腳那一側：前腳在對手外側、後腳對準對手中線（ASEP p.94）。跑起來就回到中間
+    const shiftT = this.defender && this.leadSet ? this.lead * hw * P.LEAD_SHIFT * (1 - wRun) : 0;
+    this.shift = this.shift == null ? shiftT : lerp(this.shift, shiftT, 1 - Math.exp(-6 * dt));
+    H.position.copy(lat).multiplyScalar(this.shift);
+    this.shiftW.copy(H.position);
     H.updateMatrixWorld(true);
     const hq = H.getWorldQuaternion(_q).clone();
     // 腳：踩住地面不滑動，該換位置時才跨一步。側移是 step and slide：先動移動方向那一側的腳，
     // 另一腳再滑過來，兩腳不併攏、不交叉（Fratello p.233；ASEP p.95–96）
     this.vWorld.lerp(_c.set(vel.x, 0, vel.z), 1 - Math.exp(-12 * dt));
-    const hw = lerp(this.defender ? P.STANCE_HALF_WIDTH : 0.17, 0.13, wRun);
     const stagger = (this.defender ? P.STANCE_STAGGER : 0.03) * (1 - wRun);
     const homes = this.legs.map((L) => this.footHome(L, hw, stagger, V()).applyMatrix4(H.matrixWorld));
     const toeYaw = (L) => heading + L.side * P.TOE_OUT * (1 - wRun);
     if (!this.feet) this.feet = this.legs.map((L, i) => ({ pos: homes[i].clone(), from: V(), yaw: toeYaw(L), yaw0: 0, t: -1 }));
     const F = this.feet;
-    const lat = _h.set(Math.cos(heading), 0, -Math.sin(heading)); // 身體左方（holder +X）
     // 落腳點＝站姿位置＋落地前身體會移動的距離＋半個支撐期（腳落在身體前方、支撐期中間剛好在身體下面）
     const landAt = (i, rem, out) => {
       const o = out.copy(this.vWorld).multiplyScalar(rem + stanceT * 0.5);
