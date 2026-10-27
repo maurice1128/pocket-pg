@@ -166,6 +166,30 @@ const BD_O2 = [[-1.2, 5.3, 6.6], [-0.4, 5.5, 7.6], [0.0, 5.45, 7.75], [0.35, 4.6
 // 站在傳球路線上、頭轉向球，反應慢半拍。2026-10-24：直線後門切從他背後 0.7 m 經過，onset 前後三格往傳球路線上方再移 0.05–0.1 m
 const BD_X2 = [[-1.2, 4.55, 6.85], [-0.4, 4.7, 7.9], [0.0, 4.6, 8.1], [0.3, 4.6, 8.05], [0.65, 4.35, 7.05], [1.0, 3.6, 5.65], [1.5, 2.7, 4.3]];
 
+// ---------- 看腳步選方向（2026-10-27；docs/tactics_audit.md 13.7，D-43） ----------
+// 隊友拉開（Clear-out）：兩個底角、兩個側翼都站在三分線外，其他防守者貼著自己的人，禁區沒有人提早協防。
+// 距離、偏移、速度都是假設（鐵則 10）。
+const DIR_OFFENSE = {
+  O2: RIGHT_CORNER, O3: CORNER_SPOT,
+  O4: [[-1.2, -5.0, 6.9], [1.5, -5.0, 6.9]],
+  O5: [[-1.2, 5.0, 6.9], [1.5, 5.0, 6.9]],
+};
+const DIR_DEFENSE = {
+  X2: [[-1.2, 6.2, 1.9], [1.5, 6.2, 1.9]],
+  X3: [[-1.2, -6.2, 1.9], [1.5, -6.2, 1.9]],
+  X4: [[-1.2, -4.4, 6.3], [1.5, -4.4, 6.3]],
+  X5: [[-1.2, 4.4, 6.3], [1.5, 4.4, 6.3]],
+};
+// 視線正對籃框（w = 0），不偏向弱側：左右要和「往左／右切」一致，防守者在畫面正中間
+const DIR_LOOK = { role: 'X1', w: 0 };
+const DIR_LABELS = { drive_left: '往左切', drive_right: '往右切', shoot: '自己投', 'pass:O2': '傳給右邊底角', 'pass:O3': '傳給左邊底角', 'pass:O4': '傳給左邊側翼', 'pass:O5': '傳給右邊側翼' };
+// 題 1：你在弧頂右手運球往右走，onset 時防守者跳到你右手那側封住（身體中心偏到你右邊約 0.5 m）
+const DIR_OP_PG = [[-1.2, -0.8, 8.9], [-0.5, -0.1, 8.85], [0.0, 0.45, 8.8], [0.4, 0.7, 8.8], [1.5, 0.75, 8.8]];
+const DIR_OP_X1 = [[-1.2, -0.8, 7.8], [-0.5, -0.1, 7.8], [0.0, 0.45, 7.8], [0.3, 0.95, 7.85], [1.5, 1.0, 7.85]];
+// 題 2：你在弧頂接球（三重威脅），防守者上前、0 秒時站定，胸口正對你、離你 1.05 m
+const DIR_SQ_PG = [[-1.2, 0.0, 8.9], [1.5, 0.0, 8.9]];
+const DIR_SQ_X1 = [[-1.2, 0.0, 6.5], [-0.7, 0.0, 6.75], [-0.3, 0.0, 7.5], [0.0, 0.0, 7.82], [0.25, 0.0, 7.85], [1.5, 0.0, 7.85]];
+
 // ---------- 手遞手（DHO，2026-10-25；docs/tactics_audit.md 第 12 節） ----------
 // E3／E4／E6 三姊妹：你從右側翼往上跑，接大個子從弧頂運過來的手遞手；交球後大個子用身體擋你的防守者。
 // onset（防守做選擇）前完全相同，之後只有 X1／X5 不同。交球在 t = −0.25（球的時間表 'hand'）。
@@ -644,6 +668,58 @@ export const SCENARIOS = [
       X3: [[-1.2, -5.85, 1.65], [1.5, -5.85, 1.65]],
       X4: [[-1.2, -4.0, 6.4], [1.5, -4.0, 6.4]],
     },
+  },
+  // ---------- Level 1–2：看腳步選方向（tactics_audit.md 13.7；D-43；UR-35） ----------
+  // 兩題一起練：防守者整個人偏過去 → 走他讓出來的那邊；正對你 → 攻他的前腳
+  // answer 的左右是未鏡像的；題目鏡像時 main.js 會對調
+  {
+    id: 'dir_overplay_cross',
+    cue: '防守者整個人偏到你運球手那側',
+    evidence: 'strong',
+    status: 'draft',
+    sources: ['ASEP p.37、p.40、p.96', 'NBA Coaches Playbook p.21'],
+    level: 1,
+    play: '一打一（隊友拉開）',
+    name: '封住運球手：換手走另一邊（Overplay）',
+    coverage: '隊友拉開，其他防守者都貼著自己的人；你在弧頂右手運球往右走，你的防守者整個人跳到你右手那一側，擋住往右的路。左邊沒有協防在等。',
+    driveDir: true,
+    lead: { X1: 'left' },          // 他的左腳（在你右手邊）在前，身體也偏到那側（ASEP p.94 的偏站，再加上跳過去）
+    cueRoles: ['X1'],
+    answer: 'drive_left',
+    partial: [],
+    pressure: 'tight',
+    labels: DIR_LABELS,
+    look: DIR_LOOK,
+    occludeAfter: 0.5,
+    explain: '他整個人跳到你運球手那一側，右邊被封死，左邊讓出一條直線，而且其他防守者都貼著自己的人。換手（轉身運球或交叉運球）往左切，走直線。最佳選擇：往防守者偏過去的反方向切。（如果讓出來的那邊有協防在等，答案可能不同）',
+    mistake: '硬往他封住的那側切，撞進他身體。',
+    offense: Object.assign({ PG: DIR_OP_PG }, DIR_OFFENSE),
+    defense: Object.assign({ X1: DIR_OP_X1 }, DIR_DEFENSE),
+  },
+  {
+    id: 'dir_square_lead_foot',
+    cue: '防守者正對你、一腳在前',
+    evidence: 'medium', // 查核：Fratello p.232–233 的意圖相反，待教練（research_notes/direction_read_citation_check.md）
+    status: 'draft',
+    sources: ['NBA Coaches Playbook p.22–23（Van Gundy）、p.233（Fratello）', 'ASEP p.95、p.96'],
+    level: 2,
+    play: '一打一（隊友拉開）',
+    name: '正對你、一腳在前：攻前腳（Attack the lead foot）',
+    coverage: '隊友拉開讓你在弧頂一打一。你接球面對防守者、球在你右側；他上前站好、胸口正對你，右腳在前（在你的左手邊），右手舉高。',
+    driveDir: true,
+    lead: { X1: 'right' },         // 他的右腳在前（在你左手邊）
+    square: ['X1'],                // 胸口正對你、不偏站（NBA-CP p.233 Fratello）
+    cueRoles: ['X1'],
+    answer: 'drive_left',
+    partial: [],
+    pressure: 'tight',
+    labels: DIR_LABELS,
+    look: DIR_LOOK,
+    occludeAfter: 0.5,
+    explain: '他正對你、擋住直線，沒有路可以直接走。這時攻他的前腳：把球從右側掃到左側，用交叉步跨過他在前面的那隻腳，往那一側切。他的前腳和舉高的手都在你左邊，就往左切。和「封住運球手」比一比：整個人偏過去＝走另一邊；正對你＝攻前腳。最佳選擇：往他前腳那側切。（有教練認為前腳是防守故意放的，這題待教練確認）',
+    mistake: '往他後腳那側切；或對著正前方的人硬切。',
+    offense: Object.assign({ PG: DIR_SQ_PG }, DIR_OFFENSE),
+    defense: Object.assign({ X1: DIR_SQ_X1 }, DIR_DEFENSE),
   },
   // ---------- 手遞手（DHO，tactics_audit.md 第 12 節；scenario_bank_v2 E3–E6） ----------
   {

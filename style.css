@@ -59,7 +59,13 @@ button.primary { background: var(--accent); color: #111; border-color: var(--acc
 #actions button { width: 68px; height: 68px; margin: 0; padding: 0; border-radius: 50%; font-size: 24px; font-weight: 800;
   color: #111; border: 3px solid rgba(255,255,255,0.85); box-shadow: 0 2px 8px rgba(0,0,0,0.45); touch-action: none; }
 #btn-shoot { background: var(--accent); width: 78px; height: 78px; font-size: 28px; }
-#btn-drive { background: #7fd1ff; }
+#btn-drive, #btn-dl, #btn-dr { background: #7fd1ff; }
+#btn-dl, #btn-dr { display: none; font-size: 20px !important; }
+#hud.dir #btn-dl, #hud.dir #btn-dr { display: block; }
+#hud.dir #btn-drive { display: none; }
+#dir-hint { position: absolute; transform: translateX(-50%); padding: 6px 14px; border-radius: 99px; background: rgba(0,0,0,0.65);
+  color: #7fd1ff; font-size: 15px; font-weight: 700; white-space: nowrap; pointer-events: none; }
+#dir-hint.hidden { display: none; }
 #actions button:active { transform: scale(0.93); }
 #hud.waiting #actions button { opacity: 0.45; }
 #phase { position: absolute; top: calc(max(10px, env(safe-area-inset-top)) + 26px); left: 16px; padding: 3px 10px; border-radius: 99px;

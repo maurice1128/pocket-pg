@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0822';
-import { setupLook, floorMaterials, buildArena, buildHoop, makeBall, makeBody, animateRig } from './art.js?v=0822';
+import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0823';
+import { setupLook, floorMaterials, buildArena, buildHoop, makeBall, makeBody, animateRig } from './art.js?v=0823';
 
 // ---------- 設定 ----------
 // levels：該難度會出的題目等級（初階 → 進階的分級課程）
@@ -21,13 +21,18 @@ const TOPICS = [
   { id: 'noadv', name: '沒有優勢：轉移球', phase: '外圍持球…', match: (s) => s.answer === 'reset' || s.id.startsWith('noadv_') },
   { id: 'offball', name: '無球：後門', phase: '觀察隊友…', match: (s) => s.id.startsWith('backdoor') },
   { id: 'dho', name: '手遞手（DHO）', phase: '手遞手…', match: (s) => s.id.startsWith('dho_') },
+  { id: 'dir', name: '看腳步選方向', phase: '一打一…', match: (s) => s.id.startsWith('dir_') },
 ];
 const phaseText = (sc) => (TOPICS.find((tp) => tp.id !== 'all' && tp.match(sc)) || {}).phase || '戰術進行中…';
 // 時間壓力：外圍觀察可以慢慢看（寬鬆），關鍵瞬間才緊迫。乘在難度的決策窗上
 const PRESSURE = { loose: 2.2, medium: 1.4, tight: 1.0 };
 const INTRO = 0.9;          // 每題開始前的停頓（秒）
 const OCCLUDE_AFTER = 0.25; // 遮蔽模式：onset 後多久隱藏防守者（情境可用 occludeAfter 覆寫）
-const BASE_LABELS = { drive: '切入攻擊（Drive）', reset: '不攻擊、重新組織（Reset）', backout: '運球退出來（Back out）' };
+const BASE_LABELS = { drive: '切入攻擊（Drive）', drive_left: '往左切', drive_right: '往右切', reset: '不攻擊、重新組織（Reset）', backout: '運球退出來（Back out）' };
+// 切入方向（tactics_audit 13.7）：題目的 answer 用未鏡像的左右寫；鏡像時畫面上的左右對調
+const DIR_SWAP = { drive_left: 'drive_right', drive_right: 'drive_left' };
+const isDir = (a) => a in DIR_SWAP;
+const flipDir = (a) => (rep && rep.mirror < 0 && isDir(a) ? DIR_SWAP[a] : a);
 const actionLabel = (sc, a) => (sc.labels && sc.labels[a]) || ACTIONS[a] || BASE_LABELS[a] || a;
 const BASKET = new THREE.Vector3(0, 3.05, 1.575);
 const COLORS = { court: 0xd9b382, paint: 0xc99a66, line: 0xffffff, offense: 0x2f6fd6, pg: 0x1f4fa8, defense: 0xe5533d, ring: 0xffd23f, ball: 0xf07a22 };
@@ -165,7 +170,7 @@ const inPlay = (r) => store.players5 !== false || !EXTRA_ROLES.includes(r);
       for (const m of p.parts) m.visible = false;
     }
   };
-  const anny = () => import('./body.js?v=0822').then((m) => m.init(HI)).then(swap)
+  const anny = () => import('./body.js?v=0823').then((m) => m.init(HI)).then(swap)
     .catch((e) => console.warn('真人身體載入失敗，維持低多邊形人形', e));
   if (mode === 'smplx') import('../body/smplx_body.js').then((m) => m.init()).then(swap).catch(anny);
   else if (mode !== '0') anny();
@@ -392,6 +397,7 @@ function nextRep() {
       const lead = rep.sc.lead && rep.sc.lead[k];
       p.body.lead = (lead === 'right' ? -1 : 1) * rep.mirror;
       p.body.leadSet = !!lead;
+      p.body.leadShift = (rep.sc.square || []).includes(k) ? 0 : 1;
     }
     if (cont) { p.root.visible = inPlay(k); p.ring.visible = false; continue; } // 接續：保留目前位置、速度與朝向
     p.vel.set(0, 0, 0); p.acc.set(0, 0, 0);
@@ -411,6 +417,9 @@ function nextRep() {
   if (gyro.enabled && !cont) gyro.zero = null; // 每題重新以當下手機方向為正前方（回合中不重設）
   $('hud-score').textContent = `正確 ${session.results.filter((r) => r.grade === 'correct').length}`;
   $('timer').classList.remove('live', 'late');
+  // 看腳步選方向的題目：「切」換成「◀切」「切▶」，長按後要往左／右拖（tactics_audit 13.7）
+  $('hud').classList.toggle('dir', !!rep.sc.driveDir);
+  $('hud-hint').textContent = rep.sc.driveDir ? '按一下＝投　長按後往左／右拖＝往那邊切　滑向隊友＝傳' : '按一下＝投　長按＝切　滑向隊友＝傳';
   state = 'play';
   show('play');
 }
@@ -424,7 +433,8 @@ function decide(rawAction, eventTime) {
   const sc0 = rep.sc;
   // 「不攻擊」有兩種做法：運球退出來（往下滑），或傳給題目指定的外圍安全接應者。兩者都算 reset
   const safePass = rawAction.startsWith('pass:') && (sc0.resetTargets || []).includes(rawAction.slice(5));
-  const action = rawAction === 'backout' || (sc0.answer === 'reset' && safePass) ? 'reset' : rawAction;
+  // 往左／右切：換回題目（未鏡像）的左右再評分；rawAction 留畫面上的左右
+  const action = rawAction === 'backout' || (sc0.answer === 'reset' && safePass) ? 'reset' : flipDir(rawAction);
   const onsetPerf = simToPerf(rep.onset);
   const rt = eventTime - onsetPerf;
   let grade;
@@ -454,13 +464,16 @@ function decide(rawAction, eventTime) {
     passAnim = { from: ball.position.clone(), target: thief || target, t: 0 };
   } else if (action === 'shoot') {
     passAnim = { from: ball.position.clone(), target: null, t: 0, miss: !!rep.late };
-  } else if (rawAction === 'drive' || rawAction === 'backout') {
+  } else if (rawAction === 'drive' || rawAction === 'backout' || isDir(rawAction)) {
     // 切入：帶球往籃框衝 2.5 m；退出來：運球往後撤 1.5 m。球留在手上，鏡頭跟著人走
+    // 往左／右切：往籃框方向偏 35°（假設）
     const pg = players.PG.pos.clone();
     const dir = new THREE.Vector3(BASKET.x - pg.x, 0, BASKET.z - pg.z).normalize();
-    const end = pg.clone().addScaledVector(dir, rawAction === 'drive' ? 2.5 : -1.5);
+    if (isDir(rawAction)) dir.applyAxisAngle(new THREE.Vector3(0, 1, 0), (rawAction === 'drive_left' ? 1 : -1) * 35 * Math.PI / 180);
+    const fwd = rawAction !== 'backout';
+    const end = pg.clone().addScaledVector(dir, fwd ? 2.5 : -1.5);
     const t0 = simT;
-    players.PG.path = [[t0, pg.x, pg.z], [t0 + (rawAction === 'drive' ? 0.7 : 0.6), end.x, end.z]];
+    players.PG.path = [[t0, pg.x, pg.z], [t0 + (fwd ? 0.7 : 0.6), end.x, end.z]];
     rep.tEnd = Math.max(rep.tEnd, t0 + 0.8);
   }
   state = 'resolve';
@@ -485,6 +498,7 @@ function toast(text) {
 }
 
 function showResult() {
+  if (!decision) return; // 0.65 秒內已經換題（測試腳本連續開題時會發生）
   const d = decision, sc = rep.sc;
   const titles = {
     correct: ['正確判斷！', 'good'], partial: ['可以接受', 'ok'], wrong: ['判斷錯誤', 'bad'],
@@ -500,8 +514,8 @@ function showResult() {
   $('res-time').textContent = d.decisionMs != null ? `你的選擇：${yours}　決策時間 ${d.decisionMs} ms` : `你的選擇：${yours}`;
   // 「不攻擊」的正解寫成具體做法：傳給哪個安全接應者，或運球退出來
   const resetText = () => '不攻擊，' + ((sc.resetTargets || []).map((r) => ACTIONS['pass:' + r] || r).join('或') || '回傳') + '（轉移球）';
-  const bests = [sc.answer, ...(sc.alsoBest || [])].map((a) => (a === 'reset' ? resetText() : actionLabel(sc, a))).join('、');
-  const oks = (sc.partial || []).map((a) => actionLabel(sc, a)).join('、');
+  const bests = [sc.answer, ...(sc.alsoBest || [])].map((a) => (a === 'reset' ? resetText() : actionLabel(sc, flipDir(a)))).join('、');
+  const oks = (sc.partial || []).map((a) => actionLabel(sc, flipDir(a))).join('、');
   // 一行重點：看什麼 → 做什麼（教練回饋 #1-4：文字太多）；細節收進「看解說」
   $('res-key').innerHTML = `看：<b>${sc.cue || sc.name}</b>　→　做：<b>${bests}</b>`;
   $('res-more').classList.add('hidden');
@@ -599,6 +613,15 @@ $('calib-pad').addEventListener('pointerdown', (e) => {
 let gesture = null;
 const SWIPE_MIN = 14;   // 滑動超過幾像素才算滑（越小越敏感）
 const LONG_MS = 350;    // 按住不動多久算長按（切入）
+const DIR_MIN = 28;     // 看腳步選方向的題目：長按後往左／右拖多少像素才算選了方向
+const dirHint = document.createElement('div');
+dirHint.id = 'dir-hint'; dirHint.className = 'hidden'; dirHint.textContent = '◀ 往左切　　往右切 ▶';
+$('hud').appendChild(dirHint);
+function showDirHint(g) {
+  if (!g) { dirHint.classList.add('hidden'); return; }
+  dirHint.style.left = g.x + 'px'; dirHint.style.top = (g.y - 64) + 'px';
+  dirHint.classList.remove('hidden');
+}
 // 手機長按時，瀏覽器會想跳出選單／選取文字並取消觸控，要先擋掉
 canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 canvas.addEventListener('touchstart', (e) => { if (state === 'play') e.preventDefault(); }, { passive: false });
@@ -613,13 +636,24 @@ canvas.addEventListener('pointerdown', (e) => {
   g.longTimer = setTimeout(() => {
     if (gesture !== g || state !== 'play' || g.rep !== rep) return;
     if (Math.hypot(g.lastX - g.x, g.lastY - g.y) >= SWIPE_MIN) return;
-    gesture = null; showAim(null);
+    showAim(null);
+    // 看腳步選方向的題目：長按只是「準備切」，往左／右拖才出手（決策時間算到拖出去那一刻）
+    if (rep.sc.driveDir) { g.armed = true; g.armX = g.lastX; showDirHint(g); return; }
+    gesture = null;
     decide('drive', g.t);
   }, LONG_MS);
 });
 canvas.addEventListener('pointermove', (e) => {
   if (!gesture || e.pointerId !== gesture.id) return;
   gesture.lastX = e.clientX; gesture.lastY = e.clientY;
+  if (gesture.armed) {
+    const dx = e.clientX - gesture.armX;
+    if (state === 'play' && gesture.rep === rep && Math.abs(dx) >= DIR_MIN) {
+      gesture = null; showDirHint(null);
+      decide(dx < 0 ? 'drive_left' : 'drive_right', e.timeStamp);
+    }
+    return;
+  }
   // 即時預覽：照目前的滑動方向，誰會接到球
   const a = state === 'play' ? classifySwipe(compensateStartX(gesture.x, gesture), gesture.y, e.clientX, e.clientY) : null;
   showAim(a && a.startsWith('pass:') ? a.slice(5) : null);
@@ -651,9 +685,10 @@ function updateEdgeMarks() {
   }
 }
 function showAim(role) { for (const [k, p] of Object.entries(players)) p.aim.visible = k === role; }
-canvas.addEventListener('pointercancel', () => { showAim(null); if (gesture) clearTimeout(gesture.longTimer); gesture = null; });
+canvas.addEventListener('pointercancel', () => { showAim(null); showDirHint(null); if (gesture) clearTimeout(gesture.longTimer); gesture = null; });
 canvas.addEventListener('pointerup', (e) => {
-  showAim(null);
+  showAim(null); showDirHint(null);
+  if (gesture && gesture.armed) { gesture = null; if (state === 'play') toast('長按後往左或往右拖'); return; }
   if (state !== 'play' || !gesture || e.pointerId !== gesture.id || gesture.rep !== rep) { gesture = null; return; }
   const action = classifySwipe(compensateStartX(gesture.x, gesture), gesture.y, e.clientX, e.clientY);
   const t0 = gesture.t;  // 以手指按下的時間計算反應時間
@@ -662,7 +697,7 @@ canvas.addEventListener('pointerup', (e) => {
   if (action) decide(action, t0);
 });
 // 「投」「切」按鈕：按下那一刻就決定（決策時間以按下為準）
-for (const [id, act] of [['btn-shoot', 'shoot'], ['btn-drive', 'drive']]) {
+for (const [id, act] of [['btn-shoot', 'shoot'], ['btn-drive', 'drive'], ['btn-dl', 'drive_left'], ['btn-dr', 'drive_right']]) {
   $(id).addEventListener('pointerdown', (e) => {
     e.preventDefault(); e.stopPropagation();
     if (state === 'play') decide(act, e.timeStamp);
@@ -839,29 +874,32 @@ function updateBall(dt, t) {
     }
   }
   if (firstPerson()) {
-    // 右手在視線右下方運球，左手往前護球
+    // 右手在視線右下方運球，左手往前護球。看腳步選方向的題目：鏡像時換左手（球在哪一側是線索，tactics_audit 13.7）
+    const hs = ballSide();
     const fwd = new THREE.Vector3(); camera.getWorldDirection(fwd); fwd.y = 0; fwd.normalize();
-    const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
+    const right = new THREE.Vector3(-fwd.z, 0, fwd.x).multiplyScalar(hs);
     const eye = camera.position;
     ball.position.copy(eye).addScaledVector(fwd, 0.62).addScaledVector(right, 0.3);
     ball.position.y = 0.12 + bounce * 0.8;
     const rElbow = eye.clone().addScaledVector(fwd, 0.2).addScaledVector(right, 0.3).setY(1.18);
     const rWrist = eye.clone().addScaledVector(fwd, 0.58).addScaledVector(right, 0.3).setY(Math.max(0.98, ball.position.y + 0.14));
-    placeArm(arms.right, rElbow, rWrist);
+    placeArm(hs > 0 ? arms.right : arms.left, rElbow, rWrist);
     const lElbow = eye.clone().addScaledVector(fwd, 0.22).addScaledVector(right, -0.3).setY(1.15);
     const lWrist = eye.clone().addScaledVector(fwd, 0.55).addScaledVector(right, -0.22).setY(1.22);
-    placeArm(arms.left, lElbow, lWrist);
+    placeArm(hs > 0 ? arms.left : arms.right, lElbow, lWrist);
     setArmsVisible(true);
     return;
   }
   setArmsVisible(false);
   const fwd = new THREE.Vector3(Math.sin(pg.heading), 0, Math.cos(pg.heading));
-  const right = new THREE.Vector3(fwd.z, 0, -fwd.x).multiplyScalar(-1);
+  const right = new THREE.Vector3(fwd.z, 0, -fwd.x).multiplyScalar(-ballSide());
   ball.position.copy(pg.pos).addScaledVector(fwd, 0.35).addScaledVector(right, 0.3);
   ball.position.y = 0.15 + bounce * 0.75;
 }
 
 const firstPerson = () => store.view === 'fp' && !overhead;
+// 球在控衛哪一側：1＝右手；看腳步選方向的題目鏡像時換左手（其他題目維持右手）
+const ballSide = () => (rep && rep.sc.driveDir ? rep.mirror : 1);
 
 function updateCamera(dt) {
   const pg = players.PG.pos;

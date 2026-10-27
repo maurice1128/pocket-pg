@@ -200,6 +200,7 @@ class BodyAnimator {
     this.phase = Math.random(); this.vLocal = V(); this.accLocal = V(); this.vWorld = V();
     this.lead = 1;      // 防守前腳：1＝左腳（+X）在前，-1＝右腳在前（main.js 依題目與鏡像設定）
     this.leadSet = false; // 題目有沒有指定前腳；有才把身體偏向前腳那一側
+    this.leadShift = 1;   // 偏移倍數：題目寫 square 的防守者是 0（胸口正對你、不偏站；NBA-CP p.233 Fratello）
     // 防守姿勢（main.js 依題目的 pose 每格設定）：'stance' 一般站姿、'closeout_high' 及時撲防（碎步、雙手舉高）、
     // 'closeout_low' 慢慢出來（手放低）、'flyby' 飛撲（不煞車、伸單手）、'deny' 阻絕（前手伸進傳球路線）、'spread' 張開雙手（假設）
     this.pose = 'stance'; this.chopT = 0; this.armCur = null;
@@ -212,7 +213,7 @@ class BodyAnimator {
   // 瞬間移位（新題開場）後，腳直接放回站姿位置；身體偏移依開場朝向先算好（穿模檢查第一幀就要用）
   reset(heading = 0) {
     this.feet = null; this.stepClock = 9; this.vLocal.set(0, 0, 0); this.vWorld.set(0, 0, 0); this.chopT = 0;
-    this.shift = this.defender && this.leadSet ? this.lead * P.STANCE_HALF_WIDTH * P.LEAD_SHIFT : 0;
+    this.shift = this.defender && this.leadSet ? this.lead * P.STANCE_HALF_WIDTH * P.LEAD_SHIFT * this.leadShift : 0;
     this.shiftW.set(Math.cos(heading), 0, -Math.sin(heading)).multiplyScalar(this.shift);
   }
 
@@ -266,7 +267,7 @@ class BodyAnimator {
     const hw = lerp(this.defender ? P.STANCE_HALF_WIDTH : 0.17, 0.13, wRun);
     const lat = _h.set(Math.cos(heading), 0, -Math.sin(heading)); // 身體左方（holder +X）
     // 整個人偏向前腳那一側：前腳在對手外側、後腳對準對手中線（ASEP p.94）。跑起來就回到中間
-    const shiftT = this.defender && this.leadSet ? this.lead * hw * P.LEAD_SHIFT * (1 - wRun) : 0;
+    const shiftT = this.defender && this.leadSet ? this.lead * hw * P.LEAD_SHIFT * this.leadShift * (1 - wRun) : 0;
     this.shift = this.shift == null ? shiftT : lerp(this.shift, shiftT, 1 - Math.exp(-6 * dt));
     H.position.copy(lat).multiplyScalar(this.shift);
     this.shiftW.copy(H.position);

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
 <meta name="theme-color" content="#14161a">
 <title>口袋控衛 Pocket PG</title>
-<link rel="stylesheet" href="style.css?v=0822">
+<link rel="stylesheet" href="style.css?v=0823">
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js", "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/" } }
 </script>
@@ -18,7 +18,9 @@
   <div id="hud-top"><span id="hud-rep"></span><span id="hud-play">高位擋拆</span><span id="hud-score"></span></div>
   <div id="hud-hint">按一下＝投　長按＝切　滑向隊友＝傳</div>
   <div id="actions">
+    <button id="btn-dl" aria-label="往左切">◀切</button>
     <button id="btn-drive" aria-label="切入">切</button>
+    <button id="btn-dr" aria-label="往右切">切▶</button>
     <button id="btn-shoot" aria-label="投籃">投</button>
   </div>
   <div id="phase" class="hidden">戰術進行中</div>
@@ -138,6 +140,6 @@
   </div>
 </section>
 
-<script type="module" src="js/main.js?v=0822"></script>
+<script type="module" src="js/main.js?v=0823"></script>
 </body>
 </html>
