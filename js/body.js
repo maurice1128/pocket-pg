@@ -38,6 +38,10 @@ const P = {
   LEAN_BACK_DEF: 0.10,       // 假設：防守站姿減速時最多往後仰多少（ASEP p.94：背打直、頭在支撐面上方）（rad）
   LEAD_SHIFT: 1.0,           // 整個人往前腳那一側偏「半個站姿寬」，後腳剛好在站位中線上（ASEP p.94：後腳對準對手身體中線）；
                              // 只有題目寫了 lead 才偏，因為這是一個會被讀的線索，不能預設亂給
+  // 撲防（closeout）碎步：WABC Coaches Manual p.19「快到時改小而快的步子」、NBA Coaches Playbook p.234（Fratello）
+  // 「靠近時用短碎步、保持低」。步頻、騰空時間、抬腳、持續時間都是假設
+  CHOP_F: 6.5, CHOP_SWING: 0.09, CHOP_LIFT: 0.03, CHOP_HOLD: 0.45, CHOP_DROP: 0.04,
+  FLYBY_LEAN: 0.22,          // 假設：飛撲往前撲的額外前傾（rad）（Fratello p.234：站太直或失去平衡就會撲向射手）
   LEG_ALPHA: 0.8,            // 假設：第一人稱淡化時，膝蓋以下至少保持這個不透明度（腳步要看得到）
 };
 // 位置 → 體型（身高是假設）
@@ -196,6 +200,9 @@ class BodyAnimator {
     this.phase = Math.random(); this.vLocal = V(); this.accLocal = V(); this.vWorld = V();
     this.lead = 1;      // 防守前腳：1＝左腳（+X）在前，-1＝右腳在前（main.js 依題目與鏡像設定）
     this.leadSet = false; // 題目有沒有指定前腳；有才把身體偏向前腳那一側
+    // 防守姿勢（main.js 依題目的 pose 每格設定）：'stance' 一般站姿、'closeout_high' 及時撲防（碎步、雙手舉高）、
+    // 'closeout_low' 慢慢出來（手放低）、'flyby' 飛撲（不煞車、伸單手）、'deny' 阻絕（前手伸進傳球路線）、'spread' 張開雙手（假設）
+    this.pose = 'stance'; this.chopT = 0; this.armCur = null;
     this.shift = null;  // 身體往前腳那一側偏多少（m，holder +X）
     this.shiftW = V();  // 同一個偏移的世界座標（main.js 穿模檢查用身體真正的中心）
     this.feet = null;   // 每隻腳踩在地上的世界座標；第一次 update 時放到站姿位置
@@ -204,7 +211,7 @@ class BodyAnimator {
 
   // 瞬間移位（新題開場）後，腳直接放回站姿位置；身體偏移依開場朝向先算好（穿模檢查第一幀就要用）
   reset(heading = 0) {
-    this.feet = null; this.stepClock = 9; this.vLocal.set(0, 0, 0); this.vWorld.set(0, 0, 0);
+    this.feet = null; this.stepClock = 9; this.vLocal.set(0, 0, 0); this.vWorld.set(0, 0, 0); this.chopT = 0;
     this.shift = this.defender && this.leadSet ? this.lead * P.STANCE_HALF_WIDTH * P.LEAD_SHIFT : 0;
     this.shiftW.set(Math.cos(heading), 0, -Math.sin(heading)).multiplyScalar(this.shift);
   }
@@ -227,21 +234,28 @@ class BodyAnimator {
     const dirF = speed > 1e-3 ? v.z / speed : 0, dirL = speed > 1e-3 ? v.x / speed : 0;
     const wFwd = moving * Math.max(0, dirF) ** 2, wBack = moving * Math.max(0, -dirF) ** 2, wSide = moving * dirL * dirL;
     const wIdle = 1 - moving, wRun = wFwd * sstep(1.2, 3.0, speed);
+    const pose = this.defender ? this.pose || 'stance' : 'off';
+    // 碎步：及時撲防時，跑過來（> 1 m/s）之後收成碎步，停下來後再碎步 CHOP_HOLD 秒；全速衝刺（> 3.5 m/s）時不碎步
+    if (pose === 'closeout_high' && speed > 1.0) this.chopT = P.CHOP_HOLD; else this.chopT = Math.max(0, this.chopT - dt);
+    const chop = pose === 'closeout_high' && this.chopT > 0 && speed < 3.5;
     const baseF = Math.min(P.STEP_FMAX, P.STEP_F0 + P.STEP_FK * speed);
-    const stepF = lerp(baseF, Math.min(P.SIDE_FMAX, baseF * P.SIDE_CADENCE), wSide);
+    let stepF = lerp(baseF, Math.min(P.SIDE_FMAX, baseF * P.SIDE_CADENCE), wSide);
+    if (chop) stepF = Math.max(stepF, P.CHOP_F);
     const cycF = stepF / 2;
     this.phase = (this.phase + dt * cycF * moving) % 1; // 只給跑步擺臂用
     const Ts = 1 / stepF;                                // 兩次落地之間的時間
-    const swingT = clamp(Ts * lerp(0.85, 1.2, wRun), P.SWING_MIN, P.SWING_MAX);
+    const swingT = chop ? P.CHOP_SWING : clamp(Ts * lerp(0.85, 1.2, wRun), P.SWING_MIN, P.SWING_MAX);
     const stanceT = Math.max(0.05, 2 * Ts - swingT);
-    const lift = lerp(lerp(P.LIFT_WALK, P.SLIDE_LIFT, wSide), P.LIFT_RUN, wRun);
+    const lift = chop ? P.CHOP_LIFT : lerp(lerp(P.LIFT_WALK, P.SLIDE_LIFT, wSide), P.LIFT_RUN, wRun);
     const t = performance.now() / 1000;
     const idleDrop = this.defender ? P.DROP_IDLE : P.DROP_IDLE_OFF;
-    const drop = idleDrop * wIdle + P.DROP_BACK * wBack + P.DROP_SIDE * wSide + lerp(P.DROP_BACK, P.DROP_RUN, sstep(1.2, 3.0, speed)) * wFwd;
+    let drop = idleDrop * wIdle + P.DROP_BACK * wBack + P.DROP_SIDE * wSide + lerp(P.DROP_BACK, P.DROP_RUN, sstep(1.2, 3.0, speed)) * wFwd;
+    if (chop) drop += P.CHOP_DROP;                 // 碎步時保持低（Fratello p.234）
     const bob = -P.BOB * moving * Math.cos(2 * Math.PI * Math.min(1, this.stepClock / Ts));
     const sway = P.SWAY * wIdle * Math.sin(t * 2 * Math.PI * P.SWAY_F);
     B.pelvis.position.set(this.pelvisRest.x + sway, this.pelvisRest.y - drop + bob, this.pelvisRest.z - P.HIP_BACK * (1 - wRun) * (this.defender ? 1 : 0.4));
     let lean = lerp(this.defender ? P.LEAN_IDLE : P.LEAN_IDLE_OFF, P.LEAN_RUN, wRun);
+    if (pose === 'flyby') lean += P.FLYBY_LEAN;
     const accPitch = clamp(this.accLocal.z * P.LEAN_ACC, this.defender ? -P.LEAN_BACK_DEF : -P.LEAN_MAX, P.LEAN_MAX);
     const accRoll = clamp(this.accLocal.x * P.LEAN_ACC, -P.LEAN_MAX, P.LEAN_MAX);
     lean += accPitch;
@@ -278,7 +292,7 @@ class BodyAnimator {
     const err = F.map((f, i) => (f.t >= 0 ? 0 : Math.hypot(f.pos.x - homes[i].x, f.pos.z - homes[i].z) + 0.25 * Math.abs(angDiff(toeYaw(this.legs[i]), f.yaw))));
     const sw = F.findIndex((f) => f.t >= 0);
     const busy = sw >= 0 && !(wRun > 0.5 && F[sw].t > 0.45); // 跑步時有騰空期，前一步過半就能出下一步
-    const want = moving > 0.3 ? this.stepClock >= Ts : Math.max(err[0], err[1]) > P.IDLE_ADJUST;
+    const want = moving > 0.3 || chop ? this.stepClock >= Ts : Math.max(err[0], err[1]) > P.IDLE_ADJUST;
     if (!busy && want) {
       let i;
       if (this.stepClock > 2.5 * Ts) {
@@ -313,23 +327,37 @@ class BodyAnimator {
       L.ankle.quaternion.copy(kq.invert().multiply(footQ));
     }
     // 手臂：防守者前腳那一側的手舉高、另一手在側邊守傳球路線（Fratello p.233；ASEP p.95）；
-    // 進攻球員手自然垂下；跑步時擺臂。角度是假設
+    // 進攻球員手自然垂下；跑步時擺臂。題目可用 pose 改手（依據見 tactics_audit 13.6）。角度都是假設
     const swing = Math.sin(this.phase * 2 * Math.PI);
-    for (const A of this.arms) {
-      const sd = A.side;
-      let up, fo;
-      if (this.defender) {
-        const hi = sd === this.lead;
-        up = hi ? _a.set(sd * 0.6, -0.25, 0.75) : _a.set(sd * 0.8, -0.5, 0.35);
-        fo = hi ? _b.set(sd * 0.15, 0.8, 0.55) : _b.set(sd * 0.45, -0.05, 0.9);
+    // 這幾種邊跑邊維持手的位置；及時撲防在碎步時就把手舉起來（WABC p.19：撲防最後雙手舉高）
+    const keepArms = pose === 'flyby' || pose === 'deny' || pose === 'spread' || chop;
+    if (!this.armCur) this.armCur = this.arms.map(() => ({ up: V(), fo: V(), init: false }));
+    const kArm = 1 - Math.exp(-10 * dt);
+    for (let ai = 0; ai < this.arms.length; ai++) {
+      const A = this.arms[ai], sd = A.side, hi = sd === this.lead, C = this.armCur[ai];
+      const up = _a, fo = _b;
+      if (pose === 'closeout_high') {          // 撲到時雙手舉高，保持平衡、準備橫移（WABC p.19）
+        up.set(sd * 0.45, 0.35, 0.6); fo.set(sd * 0.15, 0.95, 0.3);
+      } else if (pose === 'closeout_low') {    // 手放低（題目設定的撲防太慢；只改手，不改上身，避免多出「站太直＝該切」的線索，Fratello p.234）
+        up.set(sd * 0.22, -0.95, 0.2); fo.set(sd * 0.1, -0.75, 0.65);
+      } else if (pose === 'flyby') {           // 衝過來伸單手封投（WABC p.19：單手往前伸，之後很難橫移）
+        if (hi) { up.set(sd * 0.2, 0.75, 0.65); fo.set(sd * 0.05, 0.6, 0.8); } else { up.set(sd * 0.5, -0.7, -0.2); fo.set(sd * 0.3, -0.8, 0.3); }
+      } else if (pose === 'deny') {            // 阻絕：前手往前伸進傳球路線（ASEP p.82、p.104），另一手低
+        if (hi) { up.set(sd * 0.35, -0.05, 0.95); fo.set(sd * 0.25, 0.05, 1.0); } else { up.set(sd * 0.6, -0.6, 0.3); fo.set(sd * 0.4, -0.5, 0.75); }
+      } else if (pose === 'spread') {          // 張開雙手（書上沒有這個細節，假設）
+        up.set(sd * 0.95, 0.0, 0.3); fo.set(sd * 0.9, 0.15, 0.35);
+      } else if (this.defender) {
+        if (hi) { up.set(sd * 0.6, -0.25, 0.75); fo.set(sd * 0.15, 0.8, 0.55); } else { up.set(sd * 0.8, -0.5, 0.35); fo.set(sd * 0.45, -0.05, 0.9); }
       } else {
-        up = _a.set(sd * 0.25, -0.95, 0.15);
-        fo = _b.set(sd * 0.1, -0.6, 0.8);
+        up.set(sd * 0.25, -0.95, 0.15); fo.set(sd * 0.1, -0.6, 0.8);
       }
+      const wArm = keepArms ? 0 : wRun;
       const upRun = _h.set(sd * 0.15, -0.95, 0.45 * swing * sd).normalize(), foRun = _k.set(sd * 0.05, -0.15 + 0.5 * swing * sd, 0.9).normalize();
-      up.normalize().lerp(upRun, wRun).normalize(); fo.normalize().lerp(foRun, wRun).normalize();
-      this.aimBone(A.sh, A.rUpper, up.applyQuaternion(hq));
-      this.aimBone(A.el, A.rFore, fo.applyQuaternion(hq));
+      up.normalize().lerp(upRun, wArm).normalize(); fo.normalize().lerp(foRun, wArm).normalize();
+      // 換姿勢時手慢慢移過去（約 0.1 秒），不會瞬間跳
+      if (!C.init) { C.up.copy(up); C.fo.copy(fo); C.init = true; } else { C.up.lerp(up, kArm).normalize(); C.fo.lerp(fo, kArm).normalize(); }
+      this.aimBone(A.sh, A.rUpper, up.copy(C.up).applyQuaternion(hq));
+      this.aimBone(A.el, A.rFore, fo.copy(C.fo).applyQuaternion(hq));
     }
   }
 

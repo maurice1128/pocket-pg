@@ -279,6 +279,7 @@ export const SCENARIOS = [
     play: '快攻',
     name: '3 打 2：上方防守者後退',
     coverage: '3 打 2 快攻，上面的防守者不上來擋你，往後退到罰球線下、張開雙手守兩翼。',
+    pose: { X1: [[0, 'spread']] }, // 退守時張開雙手（假設，書上沒寫手）
     cueRoles: ['X1'],
     answer: 'shoot',
     partial: ['drive'],
@@ -441,6 +442,7 @@ export const SCENARIOS = [
     play: '接球對撲防',
     name: '撲防太慢（Late closeout）',
     coverage: '切入分球後球回到你手上，你的防守者從禁區慢慢撲出來，接球時還在兩公尺外、手放低。',
+    pose: { X1: [[-0.5, 'closeout_low']] }, // 慢慢出來、手放低（tactics_audit 13.6）
     cueRoles: ['X1', 'X4'],
     answer: 'shoot',
     partial: ['drive'],
@@ -464,6 +466,7 @@ export const SCENARIOS = [
     play: '接球對撲防',
     name: '撲防過頭（Fly-by closeout）',
     coverage: '球回到你手上，你的防守者從禁區全速衝刺撲過來，最後沒有碎步、身體往前衝、伸單手封投。',
+    pose: { X1: [[-0.2, 'flyby']] }, // 不煞車、往前撲、伸單手（WABC p.19；NBA-CP p.234）
     cueRoles: ['X1', 'X4'],
     answer: 'drive',
     partial: [],
@@ -487,6 +490,7 @@ export const SCENARIOS = [
     play: '接球對撲防',
     name: '撲防到位＋下一個人空（Extra pass）',
     coverage: '球回到你手上，你的防守者及時撲到；弧頂隊友的防守者剛才去補禁區，還在罰球線附近面向禁區。',
+    pose: { X1: [[-0.9, 'closeout_high']] }, // 及時撲到：碎步、雙手舉高（WABC p.19；NBA-CP p.234）
     cueRoles: ['X1', 'X4'],
     answer: 'pass:O4',
     partial: [],
@@ -536,6 +540,7 @@ export const SCENARIOS = [
     play: '側翼持球',
     name: '轉移後撲防太慢',
     coverage: '球從另一側經弧頂轉到你手上；你的防守者原本在協防，你接球時他才從禁區邊衝出來、還在兩公尺多外，最後幾步才煞車。其他人都站在位置上。',
+    pose: { X1: [[-0.3, 'closeout_high']] }, // 撲得晚，但最後幾步還是碎步、舉手（WABC p.19）
     cueRoles: ['X1'],
     answer: 'shoot',
     partial: [],
@@ -560,6 +565,7 @@ export const SCENARIOS = [
     play: '側翼持球',
     name: '轉移後防守到位',
     coverage: '球轉到你手上，你的防守者及時撲到：你接球時他已經在一公尺多內，最後幾步碎步、雙手舉高；其他人都已經站到位置上，弱側的人站在中線（split line）。',
+    pose: { X1: [[-0.6, 'closeout_high']] }, // 碎步、雙手舉高（WABC p.19；NBA-CP p.234）
     cueRoles: ['X1'],
     answer: 'reset',
     partial: [],
@@ -615,6 +621,7 @@ export const SCENARIOS = [
     play: '弧頂持球',
     name: '側翼被過度阻絕：走後門（Backdoor）',
     coverage: '你在弧頂持球，側翼隊友的防守者一手一腳伸進傳球路線、頭轉向球；隊友往上踩一步後，從他身後直線切向籃框。弱側沒有人內縮。',
+    pose: { X2: [[-9, 'deny'], [0.35, 'stance']] }, // 隊友切走前：前手伸進傳球路線（ASEP p.82、p.104）
     cueRoles: ['X2'],
     answer: 'pass:O2',
     partial: [],
@@ -1141,6 +1148,7 @@ export const SCENARIOS = [
     sources: ['ASEP p.133', 'NBA Coaches Playbook p.21', 'WABC Coaches Manual p.19'],
     level: 4, play: '接球對撲防', name: 'X 型輪轉後撲防太慢',
     coverage: '球轉回你手上，你的防守者從罰球線慢慢出來，你接球時他還在兩公尺多外、手放低。',
+    pose: { X1: 'closeout_low' }, // 慢慢出來、手放低（tactics_audit 13.6）
     cueRoles: ['X1'],
     answer: 'shoot', partial: ['drive'],
     pressure: 'tight',

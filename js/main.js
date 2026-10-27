@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0821';
-import { setupLook, floorMaterials, buildArena, buildHoop, makeBall, makeBody, animateRig } from './art.js?v=0821';
+import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0822';
+import { setupLook, floorMaterials, buildArena, buildHoop, makeBall, makeBody, animateRig } from './art.js?v=0822';
 
 // ---------- 設定 ----------
 // levels：該難度會出的題目等級（初階 → 進階的分級課程）
@@ -165,7 +165,7 @@ const inPlay = (r) => store.players5 !== false || !EXTRA_ROLES.includes(r);
       for (const m of p.parts) m.visible = false;
     }
   };
-  const anny = () => import('./body.js?v=0821').then((m) => m.init(HI)).then(swap)
+  const anny = () => import('./body.js?v=0822').then((m) => m.init(HI)).then(swap)
     .catch((e) => console.warn('真人身體載入失敗，維持低多邊形人形', e));
   if (mode === 'smplx') import('../body/smplx_body.js').then((m) => m.init()).then(swap).catch(anny);
   else if (mode !== '0') anny();
@@ -747,6 +747,15 @@ function separateNow() {
   for (const p of active) { p.pos.copy(p.next); p.root.position.copy(p.pos); }
 }
 
+// 防守姿勢（body.js 的 pose）：題目寫 pose: { X1: 'deny' } 整段都用；寫 [[t, 'closeout_high'], …] 就從 onset 後 t 秒起換（t 可為負）；沒寫是一般站姿
+function poseAt(spec, t) {
+  if (!spec) return 'stance';
+  if (typeof spec === 'string') return spec;
+  let cur = 'stance';
+  for (const [t0, name] of spec) if (t >= t0) cur = name;
+  return cur;
+}
+
 function updatePlayers(dt, t) {
   const active = [];
   for (const [r, p] of Object.entries(players)) {
@@ -757,7 +766,7 @@ function updatePlayers(dt, t) {
     if (inPlay(r)) active.push(p);
   }
   separate(active);
-  for (const p of Object.values(players)) {
+  for (const [r, p] of Object.entries(players)) {
     const prevVel = p.vel.clone();
     const next = p.next;
     if (dt > 0) { p.vel.copy(next).sub(p.pos).divideScalar(dt); p.acc.copy(p.vel).sub(prevVel).divideScalar(dt); }
@@ -771,6 +780,7 @@ function updatePlayers(dt, t) {
     else target = p !== players.PG ? Math.atan2(players.PG.pos.x - p.pos.x, players.PG.pos.z - p.pos.z) : p.heading; // 站定的隊友面向球
     p.heading += angDiff(target, p.heading) * (1 - Math.exp(-8 * dt));
     p.yaw.rotation.y = p.heading;
+    if (p.body && p.defender) p.body.pose = poseAt(rep.sc.pose && rep.sc.pose[r], t - rep.onset);
     if (p.body && dt > 0 && p.root.visible) p.body.update(dt, p.vel, p.acc, p.heading);
     else if (!p.body && p.root.visible) animateRig(p, dt);
     // 傾斜：重心往加速方向偏
