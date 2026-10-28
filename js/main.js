@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0823';
-import { setupLook, floorMaterials, buildArena, buildHoop, makeBall, makeBody, animateRig } from './art.js?v=0823';
+import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0824';
+import { setupLook, floorMaterials, buildArena, buildHoop, makeBall, makeBody, animateRig } from './art.js?v=0824';
 
 // ---------- 設定 ----------
 // levels：該難度會出的題目等級（初階 → 進階的分級課程）
@@ -22,6 +22,8 @@ const TOPICS = [
   { id: 'offball', name: '無球：後門', phase: '觀察隊友…', match: (s) => s.id.startsWith('backdoor') },
   { id: 'dho', name: '手遞手（DHO）', phase: '手遞手…', match: (s) => s.id.startsWith('dho_') },
   { id: 'dir', name: '看腳步選方向', phase: '一打一…', match: (s) => s.id.startsWith('dir_') },
+  // 傳出去之後鏡頭換到接球者，由你接著判斷（任務設計書 9.5；回合的 topic: 'pov'）
+  { id: 'pov', name: '換人判斷（傳球後換視角）', phase: '你接到球…', match: (s) => s.topic === 'pov' || s.id.startsWith('pov_') },
 ];
 const phaseText = (sc) => (TOPICS.find((tp) => tp.id !== 'all' && tp.match(sc)) || {}).phase || '戰術進行中…';
 // 時間壓力：外圍觀察可以慢慢看（寬鬆），關鍵瞬間才緊迫。乘在難度的決策窗上
@@ -157,6 +159,15 @@ const NUMBERS = { PG: 1, O2: 12, O3: 3, O4: 24, O5: 15, X1: 4, X2: 21, X3: 7, X4
 for (const r of OFFENSE) players[r] = makePlayer(r === 'PG' ? COLORS.pg : COLORS.offense, false, NUMBERS[r]);
 for (const r of DEFENSE) players[r] = makePlayer(COLORS.defense, true, NUMBERS[r]);
 const inPlay = (r) => store.players5 !== false || !EXTRA_ROLES.includes(r);
+// 換人判斷（傳球後鏡頭換到接球者；任務設計書 9.5）：角色名稱永遠以「你」為準，PG＝現在持球的你、X1＝你的防守者。
+// 換人時把角色和球員物件對調（身體、號碼跟著人走），題目照樣用 PG 寫；回合結束（下一題不是接續）就還原。
+// def：哪個防守者改叫 X1（輪轉時撲你的人常常不是原本守接球者的人，由回合的 pov 欄位指定；沒寫就不換防守者）
+const BASE_PLAYERS = { ...players };
+function swapToward(role, def) {
+  [players.PG, players[role]] = [players[role], players.PG];
+  if (def && def !== 'X1') [players.X1, players[def]] = [players[def], players.X1];
+}
+const resetRoles = () => Object.assign(players, BASE_PLAYERS);
 // 真人身體：預設用公開版（Anny，CC0，js/body.js＋assets/）。?body=0 用低多邊形人形；
 // ?body=smplx 用本機 SMPL-X 版（授權限非商用，檔案只在本機伺服器的 /body/，公開網站沒有）。選擇記在這支手機
 {
@@ -170,7 +181,7 @@ const inPlay = (r) => store.players5 !== false || !EXTRA_ROLES.includes(r);
       for (const m of p.parts) m.visible = false;
     }
   };
-  const anny = () => import('./body.js?v=0823').then((m) => m.init(HI)).then(swap)
+  const anny = () => import('./body.js?v=0824').then((m) => m.init(HI)).then(swap)
     .catch((e) => console.warn('真人身體載入失敗，維持低多邊形人形', e));
   if (mode === 'smplx') import('../body/smplx_body.js').then((m) => m.init()).then(swap).catch(anny);
   else if (mode !== '0') anny();
@@ -213,6 +224,7 @@ window.__pp = {
   advance(sec, fps = 30) { for (let i = 0; i < sec * fps; i++) { clockOffset += 1000 / fps; step(performance.now()); } return { state, sc: rep && rep.sc.id }; },
   act(action) { decide(action, clock()); },
   get since() { return rep ? simT - rep.onset : null; },
+  get decision() { return decision; }, // 最近一次作答（測試用，不用等結果卡的計時器）
   // 走位紀錄：每 dt 秒記下指定角色的位置（相對 onset 的時間），檢查掩護有沒有碰到人
   trace(id, roles = ['PG', 'O5', 'X1', 'X5'], dt = 0.15) {
     this.play(id);
@@ -382,6 +394,8 @@ function nextRep() {
   const sc = SCENARIOS.find((s) => s.id === scId);
   // 連續回合：第二步以後，從目前站位接續、沿用同一個左右
   const cont = poss && session.s > 0;
+  if (!cont) resetRoles();
+  switching = null; $('hud').classList.remove('bullet');
   const from = cont ? Object.fromEntries(Object.entries(players).map(([k, p]) => [k, { x: p.pos.x, z: p.pos.z }])) : null;
   rep = buildRep(sc, cont ? { from, mirror: session.mirror } : {});
   if (poss && session.s === 0) session.mirror = rep.mirror;
@@ -409,11 +423,13 @@ function nextRep() {
   }
   if (!cont) separateNow();
   // 假撲的防守者要一直面向持球者（髖部不轉），真內縮會轉向跑動方向
+  for (const k of DEFENSE) players[k].faceMode = 'ball'; // 換人後物件換了角色，先還原
   players.X3.faceMode = rep.sc.stunt ? 'ball' : 'move';
   const decisionSteps = poss ? poss.steps.filter((st) => !(SCENARIOS.find((s) => s.id === (st.sc || st)) || {}).auto).length : 0;
   const doneSteps = poss ? poss.steps.slice(0, session.s).filter((st) => !(SCENARIOS.find((s) => s.id === (st.sc || st)) || {}).auto).length : 0;
   $('hud-rep').textContent = `第 ${session.u + 1} / ${session.order.length} 題` + (poss ? `（判斷 ${Math.min(doneSteps + 1, decisionSteps)}/${decisionSteps}）` : '');
-  $('hud-play').textContent = poss ? poss.name : sc.play;
+  // 換人判斷的回合：顯示你現在是誰（例：底角接球）
+  $('hud-play').textContent = poss && poss.topic === 'pov' && !sc.auto ? sc.play : poss ? poss.name : sc.play;
   if (gyro.enabled && !cont) gyro.zero = null; // 每題重新以當下手機方向為正前方（回合中不重設）
   $('hud-score').textContent = `正確 ${session.results.filter((r) => r.grade === 'correct').length}`;
   $('timer').classList.remove('live', 'late');
@@ -483,10 +499,31 @@ function decide(rawAction, eventTime) {
   const contOn = stepObj && stepObj.continueOn;
   const goOn = poss && session.s < poss.steps.length - 1 && grade !== 'late' && grade !== 'early' &&
     (contOn ? (contOn.includes(action) || contOn.includes(rawAction)) : (grade === 'correct' || grade === 'partial'));
-  if (goOn) {
+  // 換人判斷：這一步寫了 pov（true，或改叫 X1 的防守者，例 'X3'），傳出去之後鏡頭用子彈時間飛到接球者，下一步由你當他
+  const pov = goOn && stepObj.pov && rawAction.startsWith('pass:') ? rawAction.slice(5) : null;
+  if (pov) startSwitch(pov, grade, typeof stepObj.pov === 'string' ? stepObj.pov : null);
+  else if (goOn) {
     toast(grade === 'correct' ? '好判斷，繼續' : '可以，繼續');
     setTimeout(() => { session.s++; nextRep(); }, 700);
   } else setTimeout(showResult, 650);
+}
+
+// ---------- 子彈時間換人（傳球飛行時放慢，鏡頭沿弧線從你的眼睛飛到接球者的眼睛） ----------
+const BULLET = 0.3;       // 放慢倍率：0.45 秒的傳球約 1.5 秒（假設，看起來清楚又不拖）
+const BULLET_HOLD = 0.2;  // 球到手後停多久再開始下一步（秒）
+let switching = null;
+function startSwitch(role, grade, def) {
+  switching = { role, def, from: camPos.clone(), hold: 0 };
+  $('hud').classList.add('bullet');
+  toast(grade === 'correct' ? '好判斷，換你接球' : '可以，換你接球');
+}
+function finishSwitch() {
+  const { role, def } = switching;
+  switching = null;
+  $('hud').classList.remove('bullet');
+  swapToward(role, def);
+  session.s++;
+  nextRep();
 }
 
 function toast(text) {
@@ -834,7 +871,7 @@ function updatePlayers(dt, t) {
 function updateBall(dt, t) {
   const pg = players.PG;
   if (passAnim) {
-    setArmsVisible(firstPerson());
+    setArmsVisible(firstPerson() && !switching); // 換人時鏡頭飛走，手不跟著留在半空
     passAnim.t = Math.min(1, passAnim.t + dt / 0.45);
     const u = passAnim.t;
     // 太晚投：打在籃框前緣彈出（不進）
@@ -901,31 +938,52 @@ const firstPerson = () => store.view === 'fp' && !overhead;
 // 球在控衛哪一側：1＝右手；看腳步選方向的題目鏡像時換左手（其他題目維持右手）
 const ballSide = () => (rep && rep.sc.driveDir ? rep.mirror : 1);
 
-function updateCamera(dt) {
-  const pg = players.PG.pos;
-  players.PG.root.visible = !firstPerson();
-  if (overhead) {
-    desiredPos.set(0, 15.5, 6.2);
-    desiredLook.set(0, 0, 5.2);
-  } else if (firstPerson()) {
+// 持球者 p 的鏡頭位置與視線（第一人稱或越肩）；useLook＝套用題目的 look（換人途中算接球者的鏡頭時不用）
+function camTarget(p, outPos, outLook, useLook = true) {
+  const pg = p.pos;
+  if (firstPerson()) {
     // 第一人稱：控衛眼睛高度，視線落在籃框與弱側底角之間（控衛該掃描的範圍）
     const weak = new THREE.Vector3(-6.4 * (rep ? rep.mirror : 1), 0.9, 1.3);
     // 眼睛略往後 0.3 m（頭部中心），視線微微往下，讓雙手和球進入畫面下緣
     const back = new THREE.Vector3(pg.x - BASKET.x, 0, pg.z - BASKET.z).normalize();
-    desiredPos.set(pg.x, 1.82, pg.z).addScaledVector(back, 0.3);
+    outPos.set(pg.x, 1.82, pg.z).addScaledVector(back, 0.3);
     // 題目可指定視線偏向哪個隊友（例：快攻時看籃框與跑邊線的隊友之間）
-    const look = rep && rep.sc.look;
-    if (look) desiredLook.copy(BASKET).setY(0.1).lerp(tmp.copy(players[look.role].pos).setY(0.9), look.w);
-    else desiredLook.copy(BASKET).setY(0.1).lerp(weak, 0.3);
+    const look = useLook && rep && rep.sc.look;
+    if (look) outLook.copy(BASKET).setY(0.1).lerp(tmp.copy(players[look.role].pos).setY(0.9), look.w);
+    else outLook.copy(BASKET).setY(0.1).lerp(weak, 0.3);
   } else {
     // 越肩視角：控衛後上方，看向籃框方向
     const toBasket = new THREE.Vector3(BASKET.x - pg.x, 0, BASKET.z - pg.z).normalize();
     const side = new THREE.Vector3(-toBasket.z, 0, toBasket.x).multiplyScalar(rep ? rep.mirror * 0.5 : 0.5);
     // 直向畫面垂直視角很大，鏡頭往下俯一點，讓球場佔滿畫面而不是天花板
     const portrait = innerWidth < innerHeight;
-    desiredPos.copy(pg).addScaledVector(toBasket, -2.2).add(side).setY(portrait ? 3.0 : 2.7);
-    desiredLook.copy(pg).addScaledVector(toBasket, portrait ? 4.0 : 4.5).setY(portrait ? 0.4 : 0.6);
+    outPos.copy(pg).addScaledVector(toBasket, -2.2).add(side).setY(portrait ? 3.0 : 2.7);
+    outLook.copy(pg).addScaledVector(toBasket, portrait ? 4.0 : 4.5).setY(portrait ? 0.4 : 0.6);
   }
+}
+
+const smooth = (a, b, x) => { const u = Math.min(1, Math.max(0, (x - a) / (b - a))); return u * u * (3 - 2 * u); };
+function updateCamera(dt) {
+  // 換人途中，鏡頭離開傳球者的頭 1.8 m 以後才看得到他（太近會看到身體內側）
+  players.PG.root.visible = !firstPerson() || (!!switching && camPos.distanceTo(switching.from) > 1.8);
+  if (switching && !overhead) {
+    // 子彈時間：鏡頭沿弧線（往上、往遠離籃框的方向拱起）從你飛到接球者的鏡頭位置，途中盯著球，快到時轉向接球者該看的方向
+    const u = smooth(0, 1, passAnim ? passAnim.t : 1);
+    camTarget(players[switching.role], desiredPos, desiredLook, false);
+    const mid = switching.from.clone().lerp(desiredPos, 0.5);
+    const away = new THREE.Vector3(mid.x - BASKET.x, 0, mid.z - BASKET.z).normalize();
+    mid.addScaledVector(away, 1.2).setY(mid.y + 1.1);
+    const a0 = switching.from.clone().lerp(mid, u), a1 = mid.lerp(desiredPos, u);
+    camPos.copy(a0.lerp(a1, u));
+    camLook.copy(ball.position).lerp(desiredLook, smooth(0.55, 1, u));
+    camera.position.copy(camPos);
+    camera.lookAt(camLook);
+    return;
+  }
+  if (overhead) {
+    desiredPos.set(0, 15.5, 6.2);
+    desiredLook.set(0, 0, 5.2);
+  } else camTarget(players.PG, desiredPos, desiredLook);
   const a = snapCamera ? 1 : overhead ? 1 - Math.exp(-6 * dt) : 1 - Math.exp(-5 * dt);
   snapCamera = false;
   camPos.lerp(desiredPos, a);
@@ -985,7 +1043,8 @@ function fadeNearPlayers() {
   for (const p of Object.values(players)) {
     const d = fp ? camera.position.distanceTo(tmp.copy(p.pos).setY(1.2)) : 99;
     // 真人身體貼近時半透明會看到重疊的內面，淡得更多
-    const op = Math.min(1, Math.max(p.body ? 0.12 : 0.28, (d - 0.7) / 0.9));
+    // 換人途中鏡頭會穿過包夾、掩護的人，身邊的人整個淡掉（只剩殘影很亂）
+    const op = switching ? Math.min(1, Math.max(0, (d - 1.4) / 1.0)) : Math.min(1, Math.max(p.body ? 0.12 : 0.28, (d - 0.7) / 0.9));
     for (const m of p.fadeMats) { m.opacity = op; m.depthWrite = op > 0.99; }
   }
 }
@@ -1065,13 +1124,16 @@ function step(now) {
       updateBall(dt, t);
     } else {
       // 作答後繼續播放未遮蔽的後續動作（文獻的標準回饋：切黑 → 作答 → 看完整後續；Müller et al., 2024）
+      // 換人時整個畫面放慢（子彈時間），防守輪轉照樣在動
+      const slow = switching ? BULLET : 1;
       const tEnd = rep.tEnd + 0.4;
       if (simT < tEnd) {
-        const step = Math.min(tEnd - simT, dt * cfg().timeScale);
+        const step = Math.min(tEnd - simT, dt * cfg().timeScale * slow);
         simT += step;
         updatePlayers(step, simT);
       }
-      updateBall(dt, simT);
+      updateBall(dt * slow, simT);
+      if (switching && (!passAnim || passAnim.t >= 1) && (switching.hold += dt) > BULLET_HOLD) finishSwitch();
     }
     updateCamera(dt);
     fadeNearPlayers();

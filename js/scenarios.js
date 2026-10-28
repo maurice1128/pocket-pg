@@ -223,6 +223,47 @@ const TL_X2 = [[-1.4, 5.0, 5.9], [-0.3, 4.3, 7.6], [0.0, 4.15, 7.85], [0.4, 4.05
 const TL_X1 = [[-1.4, 0.25, 8.45], [-0.7, 1.4, 8.15], [0.0, 2.6, 7.75], [0.3, 2.85, 7.65], [1.4, 3.0, 7.6]];       // 守在你和籃框之間
 const TL_LABELS = { 'pass:O2': '擊地傳給後門切（Backdoor）', drive: '假手遞、自己切', shoot: '自己投', 'pass:O5': '傳給弱側低位', 'pass:O3': '傳給弱側底角', 'pass:O4': '傳給弱側側翼' };
 
+// ---------- 換人判斷（2026-10-29；tactics_audit.md 第 14 節，D-44）：角色名稱是換人之後的 ----------
+// 14.1 短順下 4 打 3：你（PG）在罰球線上方接球；原本的控衛（O5）和包夾的 X1 還在弧頂右側；包夾的 X5 從你身後回防（NBA-CP p.257）
+const ROLL_OFFENSE = {
+  PG: [[-0.6, 0.8, 6.25], [1.5, 0.8, 6.25]],
+  O5: [[-0.6, 2.2, 9.3], [1.5, 2.3, 9.4]],
+  O4: [[-0.6, -2.4, 10.1], [1.5, -2.4, 10.1]],   // pnr_blitz 拉到弧頂左側的接應者
+  O3: [[-0.6, -6.95, 1.2], [1.5, -6.95, 1.2]],
+  O2: [[-0.6, 6.95, 1.2], [1.5, 6.95, 1.2]],
+};
+const ROLL_DEFENSE = {
+  X1: [[-0.6, 2.1, 10.2], [1.5, 2.0, 10.1]],
+  X5: [[-0.6, 2.9, 8.9], [0.0, 2.5, 8.2], [0.5, 2.1, 7.0], [1.0, 1.8, 5.6], [1.5, 1.5, 4.6]], // 慢慢繞回禁區，onset 後 1.5 秒才到你身側
+  X2: [[-0.6, 5.8, 2.0], [1.5, 5.6, 2.1]],
+};
+const ROLL_X3_PRE = [[-0.6, -1.4, 4.4], [0.0, -0.9, 4.9]];                                  // pnr_blitz 已經往禁區縮
+const ROLL_X3_UP = [...ROLL_X3_PRE, [0.3, -0.1, 5.3], [0.6, 0.25, 5.45], [1.5, 0.3, 5.5]];  // 上來擋你，離你 0.9 m
+const ROLL_X3_BACK = [...ROLL_X3_PRE, [0.3, -1.9, 4.3], [0.7, -3.6, 3.2], [1.2, -5.3, 2.3], [1.5, -5.8, 2.0]]; // 作勢後退回底角
+const ROLL_X4_PRE = [[-0.6, -3.3, 6.6], [0.0, -3.3, 6.9]];
+const ROLL_X4_UP = [...ROLL_X4_PRE, [0.4, -3.0, 7.8], [0.8, -2.8, 8.6], [1.5, -2.8, 8.8]];   // 往上跟弧頂接應者
+const ROLL_X4_DOWN = [...ROLL_X4_PRE, [0.4, -4.3, 5.0], [0.8, -5.3, 3.3], [1.2, -5.9, 2.3], [1.5, -6.1, 2.0]]; // 往下衝去補底角
+const ROLL_X4_STAY = [...ROLL_X4_PRE, [0.5, -3.2, 7.4], [1.5, -3.1, 7.6]];
+// 視線偏向弱側底角：看得到籃框、上來擋你的人和底角；弧頂接應者在左後方（邊緣箭頭）
+const ROLL_LOOK = { role: 'O3', w: 0.45 };
+const ROLL_LABELS = { 'pass:O3': '傳弱側底角', 'pass:O4': '傳弧頂接應者', 'pass:O5': '回傳控衛', 'pass:O2': '傳強側底角', drive: '自己攻籃（Attack）', shoot: '罰球線跳投' };
+// 14.2 X 型輪轉：你（PG）在弱側底角；原本的控衛（O3）往左側弧頂移動當接應者，原本的 X1（改叫 X4）跟著他
+const XOUT_CORNER_OFFENSE = {
+  PG: [[-0.6, -6.95, 1.2], [1.5, -6.95, 1.2]],
+  O3: [[-0.6, 1.6, 9.05], [0.6, 0.0, 9.35], [1.5, -0.9, 9.3]],
+  O4: [[-0.6, -5.1, 6.8], [1.5, -5.1, 6.8]],
+  O5: [[-0.6, 0.35, 3.65], [1.5, 0.3, 3.45]],
+  O2: [[-0.6, 6.95, 1.2], [1.5, 6.95, 1.2]],
+};
+const XOUT_CORNER_DEFENSE = {
+  X4: [[-0.6, 2.2, 8.5], [0.6, 0.6, 8.3], [1.5, -0.6, 8.3]],
+  X5: [[-0.6, 1.7, 6.2], [0.4, 1.2, 4.0], [1.5, 1.05, 2.85]], // 延誤後退回順下者身邊
+  X2: [[-0.6, 5.8, 2.0], [0.6, 5.0, 2.3], [1.5, 3.6, 2.7]],   // 球在另一側：從底角下沉
+};
+const XOUT_X3_STAY = [[-0.6, -0.2, 3.0], [1.5, -0.3, 3.1]];   // 內縮後留在禁區守順下
+const XOUT_CORNER_LOOK = { role: 'O4', w: 0.5 };            // 看得到籃框、撲你的人和側翼隊友
+const XOUT_CORNER_LABELS = { shoot: '接球就投', drive: '切過撲防（Attack）', 'pass:O4': '轉給側翼（Extra pass）', 'pass:O3': '回傳控衛', 'pass:O5': '傳給順下', 'pass:O2': '跳傳另一側底角' };
+
 export const SCENARIOS = [
   // ---------- Level 1：2 打 1 快攻（tactics_audit.md 第 5 節 N1、N2） ----------
   {
@@ -1248,6 +1289,190 @@ export const SCENARIOS = [
       X2: [[0, 2.7, 2.9], [0.8, 3.8, 2.55], [1.5, 4.2, 2.4]],
     },
   },
+  // ==================== 換人判斷（chainOnly；2026-10-29；tactics_audit.md 第 14 節，D-44） ====================
+  // 傳出去之後換成接球者（回合步驟的 pov）。角色名稱是「換人之後」的：PG＝你（接球者），原本的你變成他的角色名稱。
+  // 每一步從上一步結束的實際站位接續（0.6 秒）。走位、距離、速度都是假設（鐵則 10）。
+  // ---------- 14.1 包夾 → 短順下 4 打 3（第 1 步 pnr_blitz）：你是順下的掩護者，在罰球線上方接球、面向籃框 ----------
+  // 原本的你（控衛）變成 O5，還在包夾旁邊；onset 前三題相同，之後只有 X3、X4 不同
+  {
+    id: 'pov_roll_corner',
+    chainOnly: true,
+    cue: '上來擋你的人留下底角',
+    evidence: 'medium', status: 'draft', // 查核：research_notes/pov_switch_citation_check.md
+    sources: ['NBA Coaches Playbook p.85–86 圖 5.26（書上叫拉開 separation：接球後切籃或傳底角；圖上沒畫防守者）', 'NBA Coaches Playbook p.257 圖 16.1（書上補順下的是籃下的 X4；題目沒有站籃下的人，改成弱側底角的 X3 上來，轉用）', 'lowmanhelp.substack.com/p/the-blueprint-pick-and-roll-101［網］（包夾時最低的人提早迎向順下）', '[看到誰上來補你就傳他的人，是把防守順序反過來讀，需教練確認]'],
+    level: 3, play: '你是短順下（4 打 3）', name: '短順下：底角防守者上來擋你',
+    coverage: '你接到短順下的球，包夾的大個子還在你身後回防；弱側底角的防守者從禁區上來擋在你前面，另一個弱側防守者往上跟弧頂的接應者。',
+    cueRoles: ['X3', 'X4'],
+    answer: 'pass:O3', partial: [],
+    pressure: 'tight',
+    labels: ROLL_LABELS,
+    look: ROLL_LOOK,
+    fixedX3: true,
+    occludeAfter: 0.5,
+    explain: '包夾用掉兩個人，後面是 4 打 3：上來擋你的是底角的防守者，他的人（弱側底角）就空了（NBA Coaches Playbook p.257 的輪轉，轉用；p.85–86 拉開的人接球後切籃或傳底角）。最佳選擇：傳弱側底角，傳出去後換你當底角。［看誰上來補你就傳他的人，是從防守順序反推，需教練確認］',
+    mistake: '拿著球看、往邊線運（NBA Coaches Playbook p.85 列為短順下的人要避免的事）；硬攻上來擋你的人。',
+    offense: ROLL_OFFENSE,
+    defense: Object.assign({}, ROLL_DEFENSE, { X3: ROLL_X3_UP, X4: ROLL_X4_UP }),
+  },
+  {
+    id: 'pov_roll_top',
+    chainOnly: true,
+    cue: '有人補到底角、弧頂空了',
+    evidence: 'medium', status: 'draft',
+    sources: ['ASEP p.177（低位協防上去時，弱側外線的人往下補他留下的位置）', 'NBA Coaches Playbook p.257 圖 16.1（另一個人先幫忙補，轉用）', '[防守選擇放掉弧頂、補底角，以及看到有人補底角就傳弧頂，是從防守順序反推，需教練確認]'],
+    level: 3, play: '你是短順下（4 打 3）', name: '短順下：底角有人補、弧頂接應者空',
+    coverage: '你接到短順下的球；底角的防守者上來擋你，弱側側翼的防守者往下衝去補底角，弧頂的接應者身邊沒有人。',
+    cueRoles: ['X3', 'X4'],
+    answer: 'pass:O4', partial: [],
+    pressure: 'tight',
+    labels: ROLL_LABELS,
+    look: ROLL_LOOK,
+    fixedX3: true,
+    occludeAfter: 0.5,
+    explain: '底角的防守者上來擋你，弱側側翼的防守者往下補他留下的底角（ASEP p.177 的補位）：被放掉的是弧頂的接應者。最佳選擇：傳弧頂。［看到誰補底角就傳弧頂是從防守順序反推，需教練確認］',
+    mistake: '照背的答案傳底角，那邊已經有人補到；拿著球等。',
+    offense: ROLL_OFFENSE,
+    defense: Object.assign({}, ROLL_DEFENSE, { X3: ROLL_X3_UP, X4: ROLL_X4_DOWN }),
+  },
+  {
+    id: 'pov_roll_attack',
+    chainOnly: true,
+    cue: '沒人上來擋你',
+    evidence: 'strong', status: 'draft',
+    sources: ['NBA Coaches Playbook p.85（短順下可能空著，要積極往籃下攻）', '對照：NBA Coaches Playbook p.66–67 圖 4.50–4.51（有人來補就傳籃下）', 'ASEP p.126、p.171（弱側防守者假裝協防又留在自己人身邊）'],
+    level: 3, play: '你是短順下（4 打 3）', name: '短順下：沒人上來，自己攻',
+    coverage: '你接到短順下的球；底角的防守者作勢上來又退回底角，弱側側翼的防守者留在接應者身邊；包夾的大個子還在你身後。',
+    cueRoles: ['X3'],
+    answer: 'drive', alsoBest: ['shoot'], partial: [],
+    pressure: 'tight',
+    labels: ROLL_LABELS,
+    look: ROLL_LOOK,
+    fixedX3: true,
+    stunt: true, // 退回底角時面向你（假撲再回位）
+    occludeAfter: 0.5,
+    explain: '弱側兩個人都留在自己人身邊，你前面到籃框沒人，包夾的大個子還在你身後：短順下的人自己就是空檔，要積極往籃下攻（NBA Coaches Playbook p.85）；罰球線跳投也對。',
+    mistake: '沒人擋還把球傳出去，把優勢送掉；被作勢上來的假協防騙到，傳給已經有人回去的底角（ASEP p.126、p.171）；等包夾的大個子回到禁區。',
+    offense: ROLL_OFFENSE,
+    defense: Object.assign({}, ROLL_DEFENSE, { X3: ROLL_X3_BACK, X4: ROLL_X4_STAY }),
+  },
+  // 接 pov_roll_corner：你是弱側底角，撲你的是剛才上去擋順下的人（換人後叫 X1）；原本包夾的後衛改叫 X3
+  {
+    id: 'pov_roll_corner_catch',
+    chainOnly: true,
+    cue: '撲防從禁區跑來、還很遠',
+    evidence: 'strong', status: 'draft',
+    sources: ['ASEP p.133、p.171', 'NBA Coaches Playbook p.21、p.234（擋拆包夾後輪轉出來要撲防）', 'WABC Coaches Manual p.19', '[撲你的是剛才上去擋順下的人為推論，需教練確認；NBA Coaches Playbook p.257 是包夾的大個子來不及時去守弱側]'],
+    level: 3, play: '你在底角接球', name: '短順下分到底角：撲防太遠',
+    coverage: '你在弱側底角接到短順下的分球；撲你的是剛才上去擋順下的人，從罰球線附近跑過來，接球時還在 4 m 外、手放低。',
+    pose: { X1: [[0.0, 'closeout_low']] },
+    cueRoles: ['X1'],
+    answer: 'shoot', partial: ['drive'],
+    pressure: 'tight',
+    labels: { shoot: '接球就投', drive: '切過撲防（Attack）', 'pass:O3': '回傳順下', 'pass:O4': '傳弧頂', 'pass:O5': '傳控衛', 'pass:O2': '跳傳另一側底角' },
+    look: { role: 'O3', w: 0.35 },
+    fixedX3: true,
+    occludeAfter: 0.4,
+    explain: '撲你的人剛才在罰球線擋順下，要跑 8 公尺才到得了底角［誰來撲是推論］；你接球時他還在 4 公尺外、手放低。你在射程內（假設你投得到底角三分），接球就投（ASEP p.133、NBA Coaches Playbook p.21）。',
+    mistake: '在底角運一下或假投，讓他跑到位；底角運球會被底線和邊線夾住。',
+    offense: {
+      PG: [[-0.6, -6.95, 1.2], [1.5, -6.95, 1.2]],
+      O3: [[-0.6, 0.8, 6.2], [0.6, 0.4, 4.8], [1.5, 0.2, 4.0]], // 傳完往籃下補
+      O5: [[-0.6, 2.3, 9.3], [1.5, 2.4, 9.2]],
+      O4: [[-0.6, -2.4, 10.1], [1.5, -2.4, 10.1]],
+      O2: [[-0.6, 6.95, 1.2], [1.5, 6.95, 1.2]],
+    },
+    defense: {
+      X1: [[-0.6, -0.6, 5.0], [0.0, -2.6, 3.7], [0.5, -4.3, 2.6], [1.0, -5.5, 2.05], [1.5, -5.9, 1.9]], // onset 時離你 5.0 m、0.5 秒 3.0 m、1.0 秒 1.7 m（約 4 m/s 再減速）
+      X3: [[-0.6, 2.0, 10.0], [1.5, 1.9, 9.9]],
+      X5: [[-0.6, 1.4, 4.4], [0.6, 0.9, 3.2], [1.5, 0.7, 2.6]],
+      X4: [[-0.6, -2.8, 8.8], [0.6, -3.3, 7.4], [1.5, -3.6, 6.6]],
+      X2: [[-0.6, 5.6, 2.1], [1.5, 4.8, 2.4]],
+    },
+  },
+  // ---------- 14.2 弱側內縮 → 跳傳底角 → X 型輪轉（第 1 步 pnr_tag_commit） ----------
+  // 你是弱側底角，撲你的是弱側側翼的防守者（換人後叫 X1），原本的 X1 改叫 X4、跟著原本的你（改叫 O3）；內縮的 X3 還在禁區守順下
+  {
+    id: 'pov_xout_corner_shoot',
+    chainOnly: true,
+    cue: '撲防起步太晚',
+    evidence: 'strong', status: 'draft',
+    sources: ['ASEP p.126、p.133', 'ASEP p.189（球在空中就要移動；原文是接球者自己的防守者，轉用）', 'ASEP p.114（避開底線，底線像多一個防守者）', 'WABC Coaches Manual p.19'],
+    level: 4, play: '你在底角接跳傳', name: '跳傳底角：撲防起步太晚',
+    coverage: '你在弱側底角接到跳傳；該來撲你的弱側側翼防守者反應慢，球到了他還在罰球區邊才起步、手放低。',
+    pose: { X1: [[0.4, 'closeout_low']] },
+    cueRoles: ['X1'],
+    answer: 'shoot', partial: ['drive'],
+    pressure: 'tight',
+    labels: XOUT_CORNER_LABELS,
+    look: XOUT_CORNER_LOOK,
+    fixedX3: true,
+    occludeAfter: 0.4,
+    explain: '弱側防守者應該在球還在空中時就開始撲（ASEP p.189），他沒有：球到你手上他還在 4 公尺外。弱側接到跳傳就投（ASEP p.126、p.133）。',
+    mistake: '在底角運球被底線、邊線夾住（ASEP p.114）；轉出去把優勢送掉。',
+    offense: XOUT_CORNER_OFFENSE,
+    defense: Object.assign({}, XOUT_CORNER_DEFENSE, {
+      X1: [[-0.6, -3.4, 5.4], [0.0, -3.8, 4.7], [0.4, -4.8, 3.4], [0.8, -5.7, 2.4], [1.2, -6.1, 2.0], [1.5, -6.15, 1.95]], // onset 時離你 4.7 m、0.4 秒 3.1 m
+      X3: XOUT_X3_STAY,
+    }),
+  },
+  {
+    id: 'pov_xout_corner_swing',
+    chainOnly: true,
+    cue: '撲防到位、側翼沒人',
+    evidence: 'medium', status: 'draft',
+    sources: ['lowmanhelp.substack.com/p/the-blueprint-pick-and-roll-101［網］（X-out：上方的人撲底角，內縮的人最後撲側翼）', 'NBA Coaches Playbook p.68、p.79', '[所以要轉給側翼是推論，需教練確認；別的體系怎麼轉要問教練]'],
+    level: 4, play: '你在底角接跳傳', name: '跳傳底角：撲防到位，轉給側翼',
+    coverage: '你在弱側底角接到跳傳；弱側側翼的防守者提早下沉、碎步撲到一臂距離、雙手舉高；側翼隊友身邊沒人，內縮的人還在禁區守順下。',
+    pose: { X1: [[-0.3, 'closeout_high']] },
+    cueRoles: ['X1', 'X3'],
+    answer: 'pass:O4', partial: [],
+    pressure: 'tight',
+    labels: XOUT_CORNER_LABELS,
+    look: XOUT_CORNER_LOOK,
+    fixedX3: true,
+    occludeAfter: 0.4,
+    explain: '撲你的人來自側翼，所以側翼的隊友現在沒人；要補他的是剛才內縮去守順下的人，他離最遠、最後才到（Low Man Help［網］的 X 型輪轉）。多傳一次（NBA Coaches Playbook p.68），傳出去後換你當側翼。［所以要轉給側翼是推論，需教練確認］',
+    mistake: '對著到位、雙手舉高的撲防硬投或硬切。',
+    offense: XOUT_CORNER_OFFENSE,
+    defense: Object.assign({}, XOUT_CORNER_DEFENSE, {
+      X1: [[-0.6, -4.4, 4.0], [-0.2, -5.5, 2.7], [0.0, -5.85, 2.3], [0.3, -6.15, 2.05], [1.5, -6.2, 2.0]], // 接球時 1.55 m、0.3 秒碎步到 1.1 m
+      X3: [[-0.6, -0.2, 3.0], [0.5, -0.4, 3.2], [1.0, -1.6, 4.1], [1.5, -2.7, 5.0]], // 0.5 秒後才離開順下、衝向側翼
+    }),
+  },
+  // 接 pov_xout_corner_swing：你是側翼，撲你的是內縮的人（換人後叫 X1）；剛才撲底角的人改叫 X3、守底角（原本的你，改叫 O4）
+  {
+    id: 'pov_xout_wing_flyby',
+    chainOnly: true,
+    cue: '最後一個撲防衝過頭',
+    evidence: 'strong', status: 'draft', // 讀法有書直接寫（查核建議和 pov_roll_corner_catch 同一標準）
+    sources: ['NBA Coaches Playbook p.234（撲過頭，假投就能切過）', 'WABC Coaches Manual p.19', 'ASEP p.133（輔助：回位快就不要直接投）', 'lowmanhelp.substack.com/p/the-blueprint-pick-and-roll-101［網］（撲你的是內縮的人）'],
+    level: 4, play: '你在側翼接球', name: 'X 型輪轉：側翼撲防衝過頭',
+    coverage: '你在側翼接到底角的轉傳；內縮的人從禁區全速衝出來，最後沒有碎步、身體往前、單手往前撲。',
+    pose: { X1: [[-0.2, 'flyby']] },
+    cueRoles: ['X1'],
+    answer: 'drive', partial: [],
+    pressure: 'tight',
+    labels: { shoot: '接球就投', drive: '切過撲防（Attack）', 'pass:O4': '回傳底角', 'pass:O3': '傳弧頂', 'pass:O5': '傳給順下', 'pass:O2': '跳傳另一側底角' },
+    look: { role: 'X1', w: 0 },
+    fixedX3: true,
+    occludeAfter: 0.3,
+    explain: '他從禁區跑最遠的一段，全速衝、最後一步沒有碎步、身體往前，一定會衝過頭：假投一下，或趁他已經撲過頭直接從他身側切過（NBA Coaches Playbook p.234）。',
+    mistake: '對著飛過來的手硬投。',
+    offense: {
+      PG: [[-0.6, -5.1, 6.8], [1.5, -5.1, 6.8]],
+      O4: [[-0.6, -6.95, 1.2], [1.5, -6.95, 1.2]],
+      O3: [[-0.6, -0.9, 9.3], [1.5, -0.9, 9.3]],
+      O5: [[-0.6, 0.3, 3.45], [1.5, 0.3, 3.45]],
+      O2: [[-0.6, 6.95, 1.2], [1.5, 6.95, 1.2]],
+    },
+    defense: {
+      X1: [[-0.6, -1.4, 4.0], [0.0, -3.3, 5.6], [0.2, -4.05, 6.2], [0.35, -4.35, 7.0], [0.55, -4.4, 7.7], [0.9, -4.3, 8.0], [1.5, -4.3, 8.0]], // 4–5.7 m/s，從你高側 0.8 m 衝過頭
+      X3: [[-0.6, -6.2, 2.0], [1.5, -6.15, 1.95]],
+      X4: [[-0.6, -0.6, 8.3], [1.5, -0.6, 8.3]],
+      X5: [[-0.6, 1.05, 2.85], [1.5, 1.05, 2.85]],
+      X2: [[-0.6, 3.6, 2.7], [1.5, 3.4, 2.8]],
+    },
+  },
 ];
 
 // 回合：多個決策點串起來（教練回饋 #1-5：直到出手、被抄或判斷錯誤才結束）。
@@ -1293,6 +1518,66 @@ export const POSSESSIONS = [
       { sc: 'pnr_tag_commit', continueOn: ['pass:O3'] },
       'seq_xout_rotation',
       'seq_xout_late_closeout',
+    ],
+  },
+  // ---------- 換人判斷（2026-10-29；tactics_audit.md 第 14 節，D-44） ----------
+  // pov：這一步傳出去（而且在 continueOn 裡）就換成接球者；字串＝換人後改叫 X1 的防守者（撲你的人）。
+  // 同一組的回合第 1 步相同，第 2 步只看防守就知道答案（姊妹題，背不了）
+  {
+    id: 'pov_blitz_corner',
+    name: '包夾 → 短順下 → 傳底角 → 底角接球',
+    topic: 'pov', level: 3, needs5: true,
+    evidence: 'medium', status: 'draft', // 第 2 步是轉用＋反推（pov_switch_citation_check.md）
+    sources: ['NBA Coaches Playbook p.85–86 圖 5.26、p.234、p.257 圖 16.1（轉用）', 'ASEP p.133、p.171', '[第 2 步看誰上來補就傳他的人、第 3 步誰來撲為推論，需教練確認]'],
+    steps: [
+      { sc: 'pnr_blitz', continueOn: ['pass:O5'], pov: true },
+      { sc: 'pov_roll_corner', continueOn: ['pass:O3'], pov: 'X3' },
+      'pov_roll_corner_catch',
+    ],
+  },
+  {
+    id: 'pov_blitz_top',
+    name: '包夾 → 短順下 → 底角有人補，傳弧頂',
+    topic: 'pov', level: 3, needs5: true,
+    evidence: 'medium', status: 'draft',
+    sources: ['ASEP p.177', 'NBA Coaches Playbook p.257 圖 16.1（轉用）', '[第 2 步是從防守順序反推，需教練確認]'],
+    steps: [
+      { sc: 'pnr_blitz', continueOn: ['pass:O5'], pov: true },
+      'pov_roll_top',
+    ],
+  },
+  {
+    id: 'pov_blitz_attack',
+    name: '包夾 → 短順下 → 沒人上來，自己攻',
+    topic: 'pov', level: 3, needs5: true,
+    evidence: 'strong', status: 'draft',
+    sources: ['NBA Coaches Playbook p.85', 'ASEP p.126、p.171'],
+    steps: [
+      { sc: 'pnr_blitz', continueOn: ['pass:O5'], pov: true },
+      'pov_roll_attack',
+    ],
+  },
+  {
+    id: 'pov_tag_corner',
+    name: '內縮 → 跳傳底角 → 撲防太晚',
+    topic: 'pov', level: 4, needs5: true,
+    evidence: 'strong', status: 'draft',
+    sources: ['ASEP p.114、p.126、p.133、p.134、p.189（轉用）', 'WABC Coaches Manual p.19'],
+    steps: [
+      { sc: 'pnr_tag_commit', continueOn: ['pass:O3'], pov: 'X4' },
+      'pov_xout_corner_shoot',
+    ],
+  },
+  {
+    id: 'pov_tag_swing',
+    name: '內縮 → 跳傳底角 → X 型輪轉 → 側翼',
+    topic: 'pov', level: 4, needs5: true,
+    evidence: 'medium', status: 'draft',
+    sources: ['ASEP p.126、p.133', 'NBA Coaches Playbook p.68、p.79、p.234', 'lowmanhelp.substack.com/p/the-blueprint-pick-and-roll-101［網］', '[轉給側翼、撲側翼的是內縮的人為推論，需教練確認]'],
+    steps: [
+      { sc: 'pnr_tag_commit', continueOn: ['pass:O3'], pov: 'X4' },
+      { sc: 'pov_xout_corner_swing', continueOn: ['pass:O4'], pov: 'X3' },
+      'pov_xout_wing_flyby',
     ],
   },
 ];
