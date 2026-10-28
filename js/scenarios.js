@@ -41,7 +41,7 @@ const PG_PATH_HEDGE = [...PG_PRE, [0.0, 1.6, 9.0], [0.4, 2.3, 8.9], [0.8, 2.7, 9
 // 被包夾、往外運兩步（NBA Coaches Playbook p.59–60）
 const PG_PATH_BLITZ = [...PG_PRE, [0.0, 1.6, 9.0], [0.3, 2.1, 9.1], [0.7, 2.4, 9.6], [1.2, 2.5, 10.1]];
 const ROLL_PATH = [...SCREEN_SET, [0.3, 0.55, 7.0], [1.2, 0.3, 3.0]];
-// 短順下停在罰球線上方約 0.5 m（ASEP p.148）
+// 短順下：掩護者往後退一步接球（ASEP p.148）；停在罰球線上方約 0.5 m 是假設
 const SHORT_ROLL_PATH = [...SCREEN_SET, [0.4, 0.9, 6.9], [0.8, 0.8, 6.4], [1.2, 0.8, 6.3]];
 // 底角射手站在 FIBA 三分線（底角 6.6 m）外
 const CORNER_SPOT = [[-0.9, -6.95, 1.2], [1.2, -6.95, 1.2]];
@@ -58,6 +58,10 @@ const UNDER_PG = [...PG_PRE, [0.0, 1.6, 9.0], [0.4, 2.1, 8.75], [0.8, 2.3, 8.65]
 const UNDER_X1 = [[-0.9, 0.0, 8.6], [-0.5, 0.25, 7.95], [-0.2, 0.85, 7.55], [0.1, 1.5, 7.45], [0.45, 1.9, 7.5], [0.8, 2.15, 7.65], [1.2, 2.3, 7.8]];
 // 掩護者等 X1 從下方繞過、你過了掩護才順下（舊版共用 ROLL_PATH，在 t≈0 和繞下的 X1 撞在一起）。推論
 const UNDER_O5 = [[-0.9, 0.6, 8.8], [0.1, 0.6, 8.8], [0.5, 0.45, 6.9], [0.9, 0.1, 5.3], [1.4, -0.1, 3.6]];
+
+// 包夾（Blitz）的兩個人：pnr_blitz 與 pnr_blitz_dunker 共用
+const BLITZ_X1 = [...X1_HIT, [0.3, 1.6, 9.7], [0.7, 1.9, 10.1], [1.2, 2.0, 10.5]];
+const BLITZ_X5 = [[-0.9, 1.3, 7.9], [-0.3, 1.5, 8.3], [0.0, 2.1, 8.6], [0.3, 2.6, 8.7], [0.7, 2.9, 9.2], [1.2, 3.0, 9.6]];
 
 // 新手切入分球（沒有掩護）：控衛從右側切入禁區，O5 是弱側籃下的大個子（dunker spot）
 const PG_DRIVE = [[-1.2, 1.2, 9.0], [-0.6, 1.8, 7.4], [0.0, 2.0, 5.6], [0.6, 1.7, 4.2], [1.2, 1.4, 3.4]];
@@ -262,6 +266,18 @@ const XOUT_CORNER_DEFENSE = {
 };
 const XOUT_X3_STAY = [[-0.6, -0.2, 3.0], [1.5, -0.3, 3.1]];   // 內縮後留在禁區守順下
 const XOUT_CORNER_LOOK = { role: 'O4', w: 0.5 };            // 看得到籃框、撲你的人和側翼隊友
+// 14.1b 弱側籃下有大個子（弱側三角參考 NBA-CP p.257 圖 16.1：4 在弱側低位、3 在底角、X3 在兩人之間；
+// 圖不是比例尺，座標約略照圖估；擋拆位置、順下深度和書不同，見 tactics_audit 14.1b）。X4 在禁區裡看著 O4
+const DUNK_SPOT = [[-1.2, -2.9, 0.9], [1.2, -2.9, 0.9]];
+const DUNK_X4 = [[-1.2, -0.9, 2.85], [1.2, -0.85, 2.9]];
+const DUNK_X3 = [[-1.2, -4.0, 2.8], [1.2, -4.0, 2.75]];
+const DUNK_LABELS = { 'pass:O4': '傳籃下大個子', 'pass:O3': '傳弱側底角', 'pass:O5': '回傳控衛', 'pass:O2': '傳強側底角', drive: '自己攻籃（Attack）', shoot: '罰球線跳投' };
+// 第 2 步（你是短順下）：onset 前兩題相同，X4 離開籃下上來擋你；之後只有 X3 不同
+// 從禁區往你右前方上來（直線上來會擋住你看籃下大個子、傳球的路線）
+const DUNK_X4_UP = [[-0.6, -0.9, 2.9], [0.0, -0.4, 3.5], [0.3, 0.3, 4.2], [0.6, 0.9, 4.75], [1.5, 1.15, 5.25]];
+const DUNK_X3_PRE = [[-0.6, -4.0, 2.75], [0.0, -3.95, 2.65]];
+const DUNK_X3_STAY = [...DUNK_X3_PRE, [0.5, -4.6, 2.2], [1.5, -4.9, 2.0]];                       // 回到底角射手那一側（沒有照書先幫忙，推論）
+const DUNK_X3_HELP = [...DUNK_X3_PRE, [0.3, -3.5, 2.0], [0.6, -3.3, 1.7], [1.5, -3.2, 1.7]];     // 縮到籃下擋在 O4 前面（X5 回來之前先幫忙，NBA-CP p.257）
 const XOUT_CORNER_LABELS = { shoot: '接球就投', drive: '切過撲防（Attack）', 'pass:O4': '轉給側翼（Extra pass）', 'pass:O3': '回傳控衛', 'pass:O5': '傳給順下', 'pass:O2': '跳傳另一側底角' };
 
 export const SCENARIOS = [
@@ -992,8 +1008,8 @@ export const SCENARIOS = [
     // O4：onset 前和其他擋拆題相同，看到包夾才拉到弧頂左側、比你高的位置接應（NBA Coaches Playbook p.80、p.83 的原則；座標是推論）
     offense: { PG: PG_PATH_BLITZ, O5: SHORT_ROLL_PATH, O4: [[-1.2, -5.0, 6.9], [0.0, -5.05, 6.85], [0.5, -4.0, 8.4], [1.0, -2.9, 9.7], [1.4, -2.4, 10.1]] },
     defense: {
-      X1: [...X1_HIT, [0.3, 1.6, 9.7], [0.7, 1.9, 10.1], [1.2, 2.0, 10.5]],
-      X5: [[-0.9, 1.3, 7.9], [-0.3, 1.5, 8.3], [0.0, 2.1, 8.6], [0.3, 2.6, 8.7], [0.7, 2.9, 9.2], [1.2, 3.0, 9.6]],
+      X1: BLITZ_X1,
+      X5: BLITZ_X5,
       X3: [[-0.9, -5.4, 1.9], [0.2, -5.2, 2.0], [0.7, -2.8, 3.3], [1.2, -1.4, 4.4]],
       // X4：不跟出去，往籃下退到弱側 gap，同時看接應者和空出來的底角（ASEP p.184：包夾時其他人往籃下輪轉）；離接應者 3.5 m 以上、不在傳球路線上
       X4: [[-1.2, -3.4, 5.6], [0.0, -3.18, 5.38], [0.6, -3.3, 6.1], [1.4, -3.3, 6.6]],
@@ -1355,6 +1371,64 @@ export const SCENARIOS = [
     offense: ROLL_OFFENSE,
     defense: Object.assign({}, ROLL_DEFENSE, { X3: ROLL_X3_BACK, X4: ROLL_X4_STAY }),
   },
+  // ---------- 14.1b 書上原樣：弱側籃下有大個子（第 1 步 pnr_blitz_dunker，只在回合裡出） ----------
+  {
+    id: 'pnr_blitz_dunker',
+    chainOnly: true,
+    cue: '兩人包夾你',
+    evidence: 'strong', status: 'draft',
+    sources: ['ASEP p.148、p.126、p.184', 'NBA Coaches Playbook p.59–60 圖 4.25、p.257 圖 16.1（弱側籃下有人的站位）、p.80–81'],
+    level: 3, play: '高位擋拆', name: '擋拆 vs 包夾（籃下有大個子）',
+    coverage: '兩個防守者同時包夾你，掩護者停在罰球線附近；另一個大個子站在弱側籃下，底角有射手。',
+    cueRoles: ['X5'],
+    answer: 'pass:O5', partial: [],
+    labels: { 'pass:O5': '傳給短順下（Short roll）', 'pass:O4': '跳傳籃下大個子', 'pass:O3': '跳傳弱側底角', 'pass:O2': '傳強側底角' },
+    explain: '包夾（Blitz）用掉兩個人，後面變成 4 打 3。掩護者停在罰球線附近當短順下，往外運兩步拉開角度，把球交給他，讓他去打以多打少（和 pnr_blitz 同一個判斷）。',
+    mistake: '在包夾裡停球、把球舉高；從兩個人頭上跳傳到籃下或底角，球在空中太久。',
+    offense: { PG: PG_PATH_BLITZ, O5: SHORT_ROLL_PATH, O4: DUNK_SPOT },
+    defense: { X1: BLITZ_X1, X5: BLITZ_X5, X4: DUNK_X4, X3: DUNK_X3 },
+    fixedX3: true,
+  },
+  {
+    id: 'pov_roll_dunker',
+    chainOnly: true,
+    cue: '籃下的防守者上來擋你',
+    evidence: 'strong', status: 'draft',
+    sources: ['NBA Coaches Playbook p.257 圖 16.1（最低的人上來補順下，包夾的大個子回禁區接空出來的人，通常是 4）', 'NBA Coaches Playbook p.66–67 圖 4.50–4.51（提早溜開的掩護者在低位接球，籃下的防守者來補就傳籃下；用在短順下是轉用）', '[書上 X3 會先去幫忙守籃下；這題 X3 沒有去、留在底角那一側，是推論]'],
+    level: 3, play: '你是短順下（4 打 3）', name: '短順下：籃下的防守者上來擋你',
+    coverage: '你接到短順下的球，包夾的大個子還在你身後；守籃下大個子的防守者離開他、上來擋你，底角的防守者留在底角那一側。',
+    cueRoles: ['X4'],
+    answer: 'pass:O4', partial: [],
+    pressure: 'tight',
+    labels: DUNK_LABELS,
+    look: ROLL_LOOK,
+    fixedX3: true,
+    occludeAfter: 0.5,
+    explain: '後面是 4 打 3：上來擋你的是守籃下的人，籃下的大個子就沒人了，包夾的大個子還來不及回來（NBA Coaches Playbook p.257）。有人來補就傳籃下（p.66–67）。最佳選擇：傳籃下大個子。',
+    mistake: '拿著球看、往邊線運（NBA Coaches Playbook p.85）；硬攻上來擋你的人。',
+    offense: Object.assign({}, ROLL_OFFENSE, { O4: [[-0.6, -2.9, 0.9], [0.4, -3.05, 1.2], [1.5, -3.1, 1.3]] }), // 沿底線卡位、伸手要球
+    defense: Object.assign({}, ROLL_DEFENSE, { X4: DUNK_X4_UP, X3: DUNK_X3_STAY }),
+  },
+  {
+    id: 'pov_roll_dunker_corner',
+    chainOnly: true,
+    cue: '有人縮下來擋籃下、底角空了',
+    evidence: 'medium', status: 'draft',
+    sources: ['NBA Coaches Playbook p.257 圖 16.1（包夾的大個子回來之前，由 X3 先幫忙守籃下；大個子太慢時要改去守弱側的 3）', 'NBA Coaches Playbook p.85–86 圖 5.26（拉開的人接球後切籃或傳底角）', '[看到 X3 縮下來就傳底角是從防守順序反推，需教練確認]'],
+    level: 3, play: '你是短順下（4 打 3）', name: '短順下：底角防守者縮下來補籃下',
+    coverage: '你接到短順下的球；守籃下的人上來擋你，底角的防守者縮到籃下、擋在大個子前面，底角射手身邊沒人。',
+    cueRoles: ['X4', 'X3'],
+    answer: 'pass:O3', partial: [],
+    pressure: 'tight',
+    labels: DUNK_LABELS,
+    look: ROLL_LOOK,
+    fixedX3: true,
+    occludeAfter: 0.5,
+    explain: '守籃下的人上來擋你，包夾的大個子還沒回來，所以底角的防守者先縮下來幫忙守籃下（NBA Coaches Playbook p.257）：他離開的底角就空了。最佳選擇：傳弱側底角。［看到誰縮下來就傳他的人，是從防守順序反推，需教練確認］',
+    mistake: '照背的答案傳籃下，那裡已經有人擋在前面。',
+    offense: Object.assign({}, ROLL_OFFENSE, { O4: [[-0.6, -2.9, 0.9], [1.5, -2.8, 0.9]] }),
+    defense: Object.assign({}, ROLL_DEFENSE, { X4: DUNK_X4_UP, X3: DUNK_X3_HELP }),
+  },
   // 接 pov_roll_corner：你是弱側底角，撲你的是剛才上去擋順下的人（換人後叫 X1）；原本包夾的後衛改叫 X3
   {
     id: 'pov_roll_corner_catch',
@@ -1555,6 +1629,28 @@ export const POSSESSIONS = [
     steps: [
       { sc: 'pnr_blitz', continueOn: ['pass:O5'], pov: true },
       'pov_roll_attack',
+    ],
+  },
+  {
+    id: 'pov_blitz_dunker',
+    name: '包夾 → 短順下 → 籃下的人上來，傳籃下',
+    topic: 'pov', level: 3, needs5: true,
+    evidence: 'strong', status: 'draft',
+    sources: ['NBA Coaches Playbook p.66–67、p.257 圖 16.1', 'ASEP p.148'],
+    steps: [
+      { sc: 'pnr_blitz_dunker', continueOn: ['pass:O5'], pov: true },
+      'pov_roll_dunker',
+    ],
+  },
+  {
+    id: 'pov_blitz_dunker_corner',
+    name: '包夾 → 短順下 → 有人縮下來補籃下，傳底角',
+    topic: 'pov', level: 3, needs5: true,
+    evidence: 'medium', status: 'draft',
+    sources: ['NBA Coaches Playbook p.257 圖 16.1', 'ASEP p.148', '[第 2 步是從防守順序反推，需教練確認]'],
+    steps: [
+      { sc: 'pnr_blitz_dunker', continueOn: ['pass:O5'], pov: true },
+      'pov_roll_dunker_corner',
     ],
   },
   {

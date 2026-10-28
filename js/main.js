@@ -1,6 +1,6 @@
 import * as THREE from 'three';
-import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0824';
-import { setupLook, floorMaterials, buildArena, buildHoop, makeBall, makeBody, animateRig } from './art.js?v=0824';
+import { SCENARIOS, POSSESSIONS, ACTIONS, DEFAULT_OFFENSE, DEFAULT_DEFENSE } from './scenarios.js?v=0827';
+import { setupLook, floorMaterials, buildArena, buildHoop, makeBall, makeBody, animateRig } from './art.js?v=0827';
 
 // ---------- 設定 ----------
 // levels：該難度會出的題目等級（初階 → 進階的分級課程）
@@ -181,7 +181,7 @@ const resetRoles = () => Object.assign(players, BASE_PLAYERS);
       for (const m of p.parts) m.visible = false;
     }
   };
-  const anny = () => import('./body.js?v=0824').then((m) => m.init(HI)).then(swap)
+  const anny = () => import('./body.js?v=0827').then((m) => m.init(HI)).then(swap)
     .catch((e) => console.warn('真人身體載入失敗，維持低多邊形人形', e));
   if (mode === 'smplx') import('../body/smplx_body.js').then((m) => m.init()).then(swap).catch(anny);
   else if (mode !== '0') anny();
